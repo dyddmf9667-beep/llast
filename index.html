@@ -1906,4 +1906,97 @@ function renderRecurring(){
     return `<div class="rec-item">
       <div class="rec-icon">${getRecIcon(r.name)}</div>
       <div class="rec-info">
-        <div class="rec-name">${
+        <div class="rec-name">${escHtml(r.name)}</div>
+        <div class="rec-meta">
+          <span class="rec-cycle-badge ${cycleBadge}">${r.cycle==='monthly'?'월간':'연간'}</span>
+          <span class="rec-day-badge">${cycleLabel}</span>
+          <span class="rec-next-badge ${soon?'soon':'ok'}">${nextLabel}</span>
+        </div>
+      </div>
+      <div class="rec-amount">${fmt(r.amount)}</div>
+      <div class="rec-actions">
+        <button class="rec-pay-btn" onclick="payNow(${r.id})">지출 기록</button>
+        <button class="rec-del-btn" onclick="deleteRecurring(${r.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(msg,type='info'){
+  const wrap=document.getElementById('toastWrap');
+  const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; wrap.appendChild(el);
+  setTimeout(()=>{el.classList.add('hide');setTimeout(()=>el.remove(),300);},2500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+function initApp(){
+  emojiCache={};
+  document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  document.getElementById('titleText').textContent=appTitle;
+  document.getElementById('iconTrigger').textContent=selectedIcon;
+  document.title=appTitle;
+  if(photoDataURL){
+    document.getElementById('photoThumbImg').src=photoDataURL;
+    document.getElementById('photoThumb').style.display='block';
+    document.getElementById('uploadPill').style.display='none';
+  } else {
+    document.getElementById('photoThumb').style.display='none';
+    document.getElementById('uploadPill').style.display='flex';
+  }
+  if(personColors) rebuildCache();
+  render(true);
+  populateRecDaySelect();
+  renderRecurring();
+  updateCategorySelect('income');
+}
+
+// ── 시작 시 Firebase 초기화 + 자동 로그인 체크 ──
+(async function(){
+  document.getElementById('todayDate').textContent=
+    new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+
+  // Firebase 초기화 (연결 테스트 포함)
+  await fbInit();
+
+  // Firebase 연결 시 — 사용자 목록 동기화 (다른 기기에서 가입한 계정도 로그인 가능)
+  if(fbReady){
+    showFbLoading('연결 중...');
+    const fbUsers = await fbGetUsers();
+    hideFbLoading();
+    if(fbUsers && Object.keys(fbUsers).length > 0){
+      const localUsers = getUsers();
+      const merged = Object.assign({}, localUsers, fbUsers);
+      saveUsers(merged);
+    }
+  }
+
+  const autoData=JSON.parse(localStorage.getItem('__autoLogin__')||'null');
+  const users=getUsers();
+
+  if(autoData && users[autoData.code]){
+    // 자동 로그인 데이터 유효 → 1단계 건너뛰고 2단계로
+    pendingCode=autoData.code;
+    const uname=users[autoData.code].name||'';
+    document.getElementById('loginSubText').textContent=
+      (uname?uname+'님, ':'')+'4자리 인증번호를 입력하세요';
+    showView('viewLogin');
+  } else {
+    // 자동 로그인 없음 → 1단계 로그인
+    showView('viewStage1');
+  }
+})();
+</script>
+
+<!-- Firebase 로딩 오버레이 -->
+<div id="fbLoading" class="fb-loading" style="display:none">
+  <div class="fb-loading-card">
+    <div class="fb-spinner"></div>
+    <div class="fb-loading-text" id="fbLoadingText">연결 중...</div>
+  </div>
+</div>
+</body>
+</html>
