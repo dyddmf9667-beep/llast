@@ -311,6 +311,11 @@
     .logout-btn:hover{background:rgba(225,29,72,.1);color:#e11d48;border-color:rgba(225,29,72,.3)}
     .switch-btn{padding:5px 12px;border-radius:999px;border:1.5px solid rgba(167,139,250,.4);background:rgba(255,255,255,.4);font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;color:rgba(100,80,200,.6);transition:all .2s}
     .switch-btn:hover{background:rgba(167,139,250,.15);border-color:#a78bfa}
+    /* ── 동물 선택 피커 ── */
+    .animal-picker{display:flex;gap:7px;justify-content:center;margin-top:4px}
+    .animal-btn{width:36px;height:36px;border-radius:12px;border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.4);font-size:1.2rem;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;user-select:none}
+    .animal-btn:hover{background:rgba(255,255,255,.72);transform:scale(1.1)}
+    .animal-btn.active{background:linear-gradient(135deg,rgba(167,139,250,.38),rgba(99,102,241,.28));border-color:#a78bfa;transform:scale(1.12);box-shadow:0 0 0 2.5px rgba(167,139,250,.3)}
     /* Firebase 동기화 상태 */
     .sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .4s}
     .sync-dot.syncing{background:#f97316;animation:syncPulse .7s ease-in-out infinite alternate}
@@ -583,6 +588,14 @@
     <div class="analyzing-badge" id="analyzingBadge">🎨 이모티콘 분석 중...</div>
     <input type="file" id="photoInput" accept="image/*" onchange="handlePhoto(event)"/>
 
+    <!-- 동물 선택 -->
+    <div class="animal-picker" id="animalPicker">
+      <button class="animal-btn active" onclick="setAnimal('cat')"     title="고양이">🐱</button>
+      <button class="animal-btn"        onclick="setAnimal('dog')"     title="강아지">🐶</button>
+      <button class="animal-btn"        onclick="setAnimal('hamster')" title="햄스터">🐹</button>
+      <button class="animal-btn"        onclick="setAnimal('horse')"   title="말">🐴</button>
+      <button class="animal-btn"        onclick="setAnimal('fox')"     title="여우">🦊</button>
+    </div>
     <div class="char-state-grid" id="stateDots"></div>
     <div class="char-message neutral" id="charMessage">목표를 설정하고 첫 수입을 기록해봐요 ✨</div>
     <div id="deltaBadge" style="display:none"></div>
@@ -900,6 +913,7 @@ async function fbSaveUserData(code){
       titleIcon:     localStorage.getItem(uk('titleIcon')) || '💰',
       personColors:  JSON.parse(localStorage.getItem(uk('personColors'))|| 'null'),
       prevPct:       parseFloat(localStorage.getItem(uk('prevPct'))      || '0'),
+      animalType:    localStorage.getItem(uk('animalType')) || 'cat',
       syncedAt:      Date.now()
     };
     await db.collection('userdata').doc(code).set(payload);
@@ -1006,6 +1020,7 @@ async function doLogin(){
       if(fbData.titleIcon)     localStorage.setItem(uk('titleIcon'),     fbData.titleIcon);
       if(fbData.personColors)  localStorage.setItem(uk('personColors'),  JSON.stringify(fbData.personColors));
       if(fbData.prevPct!=null) localStorage.setItem(uk('prevPct'),       String(fbData.prevPct));
+      if(fbData.animalType)    localStorage.setItem(uk('animalType'),    fbData.animalType);
     }
   }
   hideLoginOverlay(); loadUserData(); initApp();
@@ -1124,6 +1139,7 @@ function loadUserData(){
   photoDataURL=localStorage.getItem(uk('photoDataURL'))||'';
   personColors=JSON.parse(localStorage.getItem(uk('personColors'))||'null');
   prevPct    =parseFloat(localStorage.getItem(uk('prevPct'))||'0');
+  animalType =localStorage.getItem(uk('animalType'))   ||'cat';
 }
 
 // ─── User data variables (populated on login) ───
@@ -1132,6 +1148,7 @@ let appTitle    = '저축 트래커';
 let selectedIcon= '💰';
 let photoDataURL= '';
 let personColors= null;
+let animalType  = 'cat'; // cat | dog | hamster | horse | fox
 let currentType ='income', currentFilter='all', currentView='list';
 let prevPct     = 0;
 let calYear, calMonth, calSelectedDate=null;
@@ -1218,16 +1235,37 @@ function handlePhoto(e){
 // ═══════════════════════════════════════════════════════════════
 function rebuildCache(){ STATES.forEach(s=>{ emojiCache[s.id]=buildEmoji(s.id,personColors); }); }
 
+function setAnimal(type){
+  animalType = type;
+  localStorage.setItem(uk('animalType'), type);
+  document.querySelectorAll('.animal-btn').forEach(b=>{
+    const t = b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    b.classList.toggle('active', t===type);
+  });
+  emojiCache={};
+  rebuildCache();
+  render();
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+}
+
+// 동물별 기본 색상 (사진 미업로드 시)
+const ANIMAL_DEF = {
+  cat:     {main:'#c8a468', belly:'#f5e8d4', eye:'#3a2010'},
+  dog:     {main:'#c8a468', belly:'#f5e8d4', eye:'#3a2010'},
+  hamster: {main:'#e8c898', belly:'#f8ede0', eye:'#2a1808'},
+  horse:   {main:'#7a5030', belly:'#c8a478', eye:'#2a1808'},
+  fox:     {main:'#d4681a', belly:'#f8ede0', eye:'#3a2010'},
+};
+
 function buildEmoji(sid,colors){
-  // ── 색상 팔레트 — personColors로 자동 커스터마이징 ──
-  // colors.hair  → 털 색 (사진 머리카락)
-  // colors.skin  → 배/뺨 색 (사진 피부)
-  // colors.eye   → 눈 홍채 색 (hair 기반 파생)
-  const mainC  = colors?.hair  || '#c8a468'; // 몸통 털
-  const bellyC = colors?.skin  || '#f5e8d4'; // 배·뺨 안쪽
-  const eyeC   = colors?.eye   || '#3a2010'; // 눈 홍채
-  const OL     = '#1a1209';                  // 아웃라인
-  const PINK   = '#f4a8b8';                  // 귀 안쪽 핑크
+  // ── 색상 팔레트 — personColors + 동물별 기본값 ──
+  const type   = animalType || 'cat';
+  const def    = ANIMAL_DEF[type] || ANIMAL_DEF.cat;
+  const mainC  = colors?.hair  || def.main;
+  const bellyC = colors?.skin  || def.belly;
+  const eyeC   = colors?.eye   || def.eye;
+  const OL     = '#1a1209';
+  const PINK   = '#f4a8b8';
   const NOSE   = '#e88a9a';                  // 코
 
   // ── 상태별 애니메이션 ──
@@ -1256,48 +1294,6 @@ function buildEmoji(sid,colors){
     9:`<circle cx="80" cy="98" r="74" fill="rgba(120,130,150,.09)"/>`,
    10:`<circle cx="80" cy="98" r="74" fill="rgba(80,90,110,.11)"/>`,
   }[sid]||'';
-
-  // ══════════════════════════════════════════════════════════
-  //  CHIBI CAT — 레퍼런스 스타일 (치비 고양이, 정면, 통통)
-  // ══════════════════════════════════════════════════════════
-
-  // 귀 (크고 뾰족한 고양이 귀)
-  const ears=`
-    <path d="M20 72 L40 10 L78 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
-    <path d="M28 70 L45 18 L73 54Z" fill="${PINK}"/>
-    <path d="M140 72 L120 10 L82 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
-    <path d="M132 70 L115 18 L87 54Z" fill="${PINK}"/>`;
-
-  // 머리 (크고 둥근 치비 머리)
-  const head=`
-    <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
-    <ellipse cx="80" cy="104" rx="36" ry="30" fill="${bellyC}"/>`;
-
-  // 코
-  const nose=`
-    <ellipse cx="80" cy="108" rx="7.5" ry="5.8" fill="${NOSE}" stroke="${OL}" stroke-width="1.3"/>
-    <ellipse cx="80" cy="107" rx="3.8" ry="2.2" fill="rgba(255,255,255,.3)"/>`;
-
-  // 몸 (통통한 둥근 몸)
-  const body=`
-    <ellipse cx="80" cy="164" rx="48" ry="32" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
-    <ellipse cx="80" cy="166" rx="34" ry="23" fill="${bellyC}"/>`;
-
-  // 팔 (통통한 짧은 팔)
-  const arms=`
-    <path d="M32 148 Q16 156 16 170 Q16 182 32 184 Q50 184 52 170 Q52 158 32 148Z"
-          fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
-    <ellipse cx="28" cy="180" rx="14" ry="9" fill="${bellyC}"/>
-    <path d="M128 148 Q144 156 144 170 Q144 182 128 184 Q110 184 108 170 Q108 158 128 148Z"
-          fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
-    <ellipse cx="132" cy="180" rx="14" ry="9" fill="${bellyC}"/>`;
-
-  // 다리/발
-  const legs=`
-    <ellipse cx="56"  cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
-    <ellipse cx="56"  cy="191" rx="16" ry="8"  fill="${bellyC}"/>
-    <ellipse cx="104" cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
-    <ellipse cx="104" cy="191" rx="16" ry="8"  fill="${bellyC}"/>`;
 
   // ── 눈 빌더 ──
   const lx=58, rx_=102, ey=80;
@@ -1355,76 +1351,176 @@ function buildEmoji(sid,colors){
     <ellipse class="tl" cx="40"  cy="96" rx="5.5" ry="8" fill="rgba(100,170,255,.88)"/>
     <ellipse class="tr" cx="120" cy="96" rx="5.5" ry="8" fill="rgba(100,170,255,.88)"/>`;
 
-  // ── 수염 ──
-  const whiskers=(sid<=6)
-    ?`<line x1="10" y1="108" x2="55" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
-      <line x1="10" y1="118" x2="53" y2="119" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
-      <line x1="105" y1="115" x2="150" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
-      <line x1="107" y1="119" x2="150" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`
-    :`<line x1="10" y1="110" x2="53" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>
-      <line x1="107" y1="115" x2="150" y2="110" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>`;
-
-  // ── 상태별 조합 ──
+  // ── 상태별 감정 조합 (공통) ──
   let eyesEl, browEl='', mouthEl, cheekEl='', extraEl='', tearEl='';
-
   if(sid===1){
-    eyesEl = happyEye(lx)+happyEye(rx_);
-    mouthEl= mouths.grin; cheekEl=cheekBig;
-    extraEl=`
-      <g style="animation:bounce .55s ease-in-out infinite;transform-origin:80px 22px">
-        <path d="M60 46 L68 20 L80 40 L92 20 L100 46Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.8" stroke-linejoin="round"/>
-        <circle cx="60"  cy="46" r="3.8" fill="#ef4444"/>
-        <circle cx="80"  cy="42" r="4.4" fill="#60a5fa"/>
-        <circle cx="100" cy="46" r="3.8" fill="#ef4444"/>
-      </g>
-      <text x="2"   y="44" font-size="18">✨</text>
-      <text x="132" y="44" font-size="18">✨</text>
-      <text x="4"   y="200" font-size="16">🎉</text>
-      <text x="126" y="200" font-size="16">🎊</text>`;
+    eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
+    extraEl=`<g style="animation:bounce .55s ease-in-out infinite;transform-origin:80px 22px">
+      <path d="M60 46 L68 20 L80 40 L92 20 L100 46Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="60" cy="46" r="3.8" fill="#ef4444"/>
+      <circle cx="80" cy="42" r="4.4" fill="#60a5fa"/>
+      <circle cx="100" cy="46" r="3.8" fill="#ef4444"/>
+    </g>
+    <text x="2" y="44" font-size="18">✨</text><text x="132" y="44" font-size="18">✨</text>
+    <text x="4" y="200" font-size="16">🎉</text><text x="126" y="200" font-size="16">🎊</text>`;
   } else if(sid===2){
-    eyesEl = happyEye(lx)+happyEye(rx_);
-    mouthEl= mouths.grin; cheekEl=cheekBig;
+    eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
     extraEl=`<text x="4" y="46" font-size="18">💚</text><text x="132" y="46" font-size="18">💚</text>`;
   } else if(sid===3){
-    eyesEl = normalEye(lx)+normalEye(rx_);
-    mouthEl= mouths.smile; cheekEl=cheekBig;
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekBig;
   } else if(sid===4){
-    eyesEl = normalEye(lx)+normalEye(rx_);
-    mouthEl= mouths.smile; cheekEl=cheekLight;
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekLight;
   } else if(sid===5){
-    eyesEl = normalEye(lx)+normalEye(rx_);
-    mouthEl= mouths.slight; cheekEl=cheekLight;
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.slight; cheekEl=cheekLight;
   } else if(sid===6){
-    eyesEl = normalEye(lx)+normalEye(rx_);
-    mouthEl= mouths.neutral;
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.neutral;
   } else if(sid===7){
-    browEl = browWorried;
-    eyesEl = normalEye(lx)+normalEye(rx_);
-    mouthEl= mouths.frown_s;
+    browEl=browWorried; eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.frown_s;
     extraEl=`<text x="4" y="56" font-size="15">💧</text>`;
   } else if(sid===8){
-    browEl = browSad;
-    eyesEl = sadEye(lx)+sadEye(rx_);
-    mouthEl= mouths.frown; tearEl=tearsEl;
+    browEl=browSad; eyesEl=sadEye(lx)+sadEye(rx_); mouthEl=mouths.frown; tearEl=tearsEl;
   } else if(sid===9){
-    browEl = browSad;
-    eyesEl = sadEye(lx)+sadEye(rx_);
-    mouthEl= mouths.frown_b; tearEl=tearsEl;
+    browEl=browSad; eyesEl=sadEye(lx)+sadEye(rx_); mouthEl=mouths.frown_b; tearEl=tearsEl;
   } else {
-    eyesEl = xEye(lx)+xEye(rx_);
-    mouthEl= mouths.frown_b; tearEl=tearsEl;
+    eyesEl=xEye(lx)+xEye(rx_); mouthEl=mouths.frown_b; tearEl=tearsEl;
     extraEl=`<text x="118" y="194" font-size="16">💸</text>`;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  동물별 신체 구조
+  // ══════════════════════════════════════════════════════════
+  // 공통 몸통·팔·다리
+  const body=`
+    <ellipse cx="80" cy="164" rx="48" ry="32" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+    <ellipse cx="80" cy="166" rx="34" ry="23" fill="${bellyC}"/>`;
+  const arms=`
+    <path d="M32 148 Q16 156 16 170 Q16 182 32 184 Q50 184 52 170 Q52 158 32 148Z" fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
+    <ellipse cx="28" cy="180" rx="14" ry="9" fill="${bellyC}"/>
+    <path d="M128 148 Q144 156 144 170 Q144 182 128 184 Q110 184 108 170 Q108 158 128 148Z" fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
+    <ellipse cx="132" cy="180" rx="14" ry="9" fill="${bellyC}"/>`;
+  const legs=`
+    <ellipse cx="56"  cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="56"  cy="191" rx="16" ry="8"  fill="${bellyC}"/>
+    <ellipse cx="104" cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="104" cy="191" rx="16" ry="8"  fill="${bellyC}"/>`;
+
+  let ears='', head='', nose='', faceOver='', whiskers='';
+
+  if(type==='dog'){
+    // 🐶 강아지 — 늘어진 귀, 큰 젖은 코
+    ears=`
+      <ellipse cx="22" cy="68" rx="20" ry="35" fill="${mainC}" stroke="${OL}" stroke-width="2.5" transform="rotate(-10 22 68)"/>
+      <ellipse cx="22" cy="68" rx="13" ry="26" fill="${bellyC}" opacity=".65" transform="rotate(-10 22 68)"/>
+      <ellipse cx="138" cy="68" rx="20" ry="35" fill="${mainC}" stroke="${OL}" stroke-width="2.5" transform="rotate(10 138 68)"/>
+      <ellipse cx="138" cy="68" rx="13" ry="26" fill="${bellyC}" opacity=".65" transform="rotate(10 138 68)"/>`;
+    head=`
+      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="106" rx="36" ry="28" fill="${bellyC}"/>`;
+    nose=`
+      <ellipse cx="80" cy="112" rx="11" ry="9" fill="${OL}"/>
+      <ellipse cx="80" cy="110" rx="6"  ry="3.8" fill="rgba(255,255,255,.18)"/>`;
+    faceOver=`
+      <circle cx="54" cy="65" r="4.5" fill="${mainC}" opacity=".75" stroke="${OL}" stroke-width="1.2"/>
+      <circle cx="106" cy="65" r="4.5" fill="${mainC}" opacity=".75" stroke="${OL}" stroke-width="1.2"/>`;
+
+  } else if(type==='hamster'){
+    // 🐹 햄스터 — 작은 둥근 귀, 통통한 볼 주머니
+    ears=`
+      <circle cx="52" cy="38" r="20" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+      <circle cx="52" cy="38" r="12" fill="${PINK}"/>
+      <circle cx="108" cy="38" r="20" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+      <circle cx="108" cy="38" r="12" fill="${PINK}"/>`;
+    // 볼 주머니 (귀 뒤에 위치)
+    faceOver=`
+      <ellipse cx="16" cy="106" rx="26" ry="22" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+      <ellipse cx="16" cy="108" rx="18" ry="15" fill="${bellyC}"/>
+      <ellipse cx="144" cy="106" rx="26" ry="22" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+      <ellipse cx="144" cy="108" rx="18" ry="15" fill="${bellyC}"/>`;
+    head=`
+      <ellipse cx="80" cy="90" rx="66" ry="60" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="106" rx="30" ry="24" fill="${bellyC}"/>`;
+    nose=`
+      <ellipse cx="80" cy="110" rx="5.5" ry="4.5" fill="#e06070" stroke="${OL}" stroke-width="1.2"/>
+      <ellipse cx="80" cy="109" rx="2.8" ry="2"   fill="rgba(255,255,255,.3)"/>`;
+
+  } else if(type==='horse'){
+    // 🐴 말 — 긴 귀, 갈기, 큰 콧구멍
+    ears=`
+      <path d="M48 54 L52 6 L74 46Z" fill="${mainC}" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M52 52 L56 12 L72 46Z" fill="${PINK}"/>
+      <path d="M112 54 L108 6 L86 46Z" fill="${mainC}" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M108 52 L104 12 L88 46Z" fill="${PINK}"/>`;
+    // 갈기
+    faceOver=`
+      <path d="M48 38 Q58 8 80 4 Q102 8 112 38 Q100 16 80 12 Q60 16 48 38Z" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
+      <path d="M54 36 Q62 14 80 10 Q98 14 106 36 Q96 20 80 16 Q64 20 54 36Z" fill="${bellyC}" opacity=".4"/>`;
+    head=`
+      <circle cx="80" cy="84" r="60" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="106" rx="34" ry="28" fill="${bellyC}"/>`;
+    // 콧구멍 2개
+    nose=`
+      <ellipse cx="72" cy="116" rx="9" ry="7.5" fill="${OL}" opacity=".55"/>
+      <ellipse cx="88" cy="116" rx="9" ry="7.5" fill="${OL}" opacity=".55"/>
+      <ellipse cx="72" cy="115" rx="5" ry="4"   fill="rgba(255,255,255,.2)"/>
+      <ellipse cx="88" cy="115" rx="5" ry="4"   fill="rgba(255,255,255,.2)"/>`;
+
+  } else if(type==='fox'){
+    // 🦊 여우 — 아주 큰 뾰족 귀, 눈 주변 마스크, 뺨 흰 패치
+    ears=`
+      <path d="M14 68 L32 4 L74 50Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M22 66 L36 10 L70 50Z" fill="${PINK}"/>
+      <path d="M146 68 L128 4 L86 50Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M138 66 L124 10 L90 50Z" fill="${PINK}"/>`;
+    head=`
+      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="104" rx="34" ry="28" fill="${bellyC}"/>`;
+    faceOver=`
+      <ellipse cx="56" cy="80" rx="22" ry="18" fill="${OL}" opacity=".16"/>
+      <ellipse cx="104" cy="80" rx="22" ry="18" fill="${OL}" opacity=".16"/>
+      <ellipse cx="44" cy="108" rx="18" ry="24" fill="${bellyC}" opacity=".88"/>
+      <ellipse cx="116" cy="108" rx="18" ry="24" fill="${bellyC}" opacity=".88"/>`;
+    nose=`
+      <ellipse cx="80" cy="108" rx="7.5" ry="6" fill="${OL}"/>
+      <ellipse cx="80" cy="107" rx="4"   ry="2.5" fill="rgba(255,255,255,.15)"/>`;
+    whiskers=sid<=6
+      ?`<line x1="8"  y1="108" x2="52" y2="114" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
+        <line x1="8"  y1="118" x2="50" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>
+        <line x1="108" y1="114" x2="152" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
+        <line x1="110" y1="118" x2="152" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>`
+      :`<line x1="8"  y1="110" x2="50" y2="115" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>
+        <line x1="110" y1="115" x2="152" y2="110" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>`;
+
+  } else {
+    // 🐱 고양이 (기본)
+    ears=`
+      <path d="M20 72 L40 10 L78 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M28 70 L45 18 L73 54Z" fill="${PINK}"/>
+      <path d="M140 72 L120 10 L82 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M132 70 L115 18 L87 54Z" fill="${PINK}"/>`;
+    head=`
+      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="104" rx="36" ry="30" fill="${bellyC}"/>`;
+    nose=`
+      <ellipse cx="80" cy="108" rx="7.5" ry="5.8" fill="#e88a9a" stroke="${OL}" stroke-width="1.3"/>
+      <ellipse cx="80" cy="107" rx="3.8" ry="2.2" fill="rgba(255,255,255,.3)"/>`;
+    whiskers=sid<=6
+      ?`<line x1="10"  y1="108" x2="55" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+        <line x1="10"  y1="118" x2="53" y2="119" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
+        <line x1="105" y1="115" x2="150" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+        <line x1="107" y1="119" x2="150" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`
+      :`<line x1="10"  y1="110" x2="53" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>
+        <line x1="107" y1="115" x2="150" y2="110" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>`;
   }
 
   return `<svg viewBox="0 0 160 200" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs><style>${css}</style></defs>
   ${bgFX}
   <g class="hb">
-    ${body}
-    ${arms}
-    ${legs}
+    ${body}${arms}${legs}
+    ${faceOver && type==='hamster' ? faceOver : ''}
     ${ears}
     ${head}
+    ${faceOver && type!=='hamster' ? faceOver : ''}
     ${browEl}
     ${eyesEl}
     ${nose}
@@ -1934,6 +2030,11 @@ function toast(msg,type='info'){
 // ═══════════════════════════════════════════════════════════════
 function initApp(){
   emojiCache={};
+  // 동물 선택 버튼 활성화
+  document.querySelectorAll('.animal-btn').forEach(b=>{
+    const t=b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    b.classList.toggle('active', t===animalType);
+  });
   document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
   document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
   document.getElementById('titleText').textContent=appTitle;
