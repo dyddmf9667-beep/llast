@@ -106,6 +106,25 @@
     .compare-box.current-box .cb-value{background:linear-gradient(90deg,#059669,#0d9488);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
     .compare-vs{text-align:center;font-size:.9rem;font-weight:800;color:rgba(45,45,58,.35);padding:0 10px}
     .progress-wrap{margin-top:16px}
+    /* 러너 + 바를 같은 컨테이너에 — 완벽한 좌우 동기화 */
+    .progress-track{position:relative;padding-top:82px}
+    .progress-runner{
+      position:absolute;
+      top:0; height:86px; width:60px;
+      transform:translateX(-50%);
+      transition:left .7s cubic-bezier(.4,0,.2,1);
+      pointer-events:none;
+      filter:drop-shadow(0 3px 7px rgba(100,80,160,.22));
+    }
+    .progress-runner svg{width:100%;height:100%;overflow:visible}
+    /* 달성 100%: 깃발 */
+    .progress-flag{
+      position:absolute;right:-6px;top:-4px;
+      font-size:1.1rem;
+      animation:flagWave .8s ease-in-out infinite alternate;
+      pointer-events:none;display:none;
+    }
+    @keyframes flagWave{from{transform:rotate(-8deg)}to{transform:rotate(8deg)}}
     .progress-meta{display:flex;justify-content:space-between;font-size:.82rem;color:rgba(45,45,58,.55);margin-bottom:8px}
     .progress-bg{width:100%;height:18px;border-radius:999px;background:rgba(200,190,230,.25);border:1px solid rgba(255,255,255,.5);overflow:hidden}
     .progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#a78bfa,#6366f1,#38bdf8);background-size:200% 100%;transition:width .7s cubic-bezier(.4,0,.2,1);animation:shimmer 3s linear infinite;position:relative}
@@ -616,7 +635,13 @@
     </div>
     <div class="progress-wrap">
       <div class="progress-meta"><span>달성률</span><span id="remainDisplay">남은 금액: ₩0</span></div>
-      <div class="progress-bg"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <!-- 러너 + 바를 같은 컨테이너에 -->
+      <div class="progress-track">
+        <div class="progress-runner" id="progressRunner">
+          <span class="progress-flag" id="progressFlag">🚩</span>
+        </div>
+        <div class="progress-bg"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      </div>
       <div class="progress-pct" id="progressPct">0%</div>
     </div>
     <div class="breakdown-row">
@@ -1122,6 +1147,7 @@ function hideLoginOverlay(){
   document.getElementById('userChipName').textContent='👤 '+uname;
 }
 function doLogout(){
+  stopPatrol(); _prX=0; _prDir=1;
   currentUser=''; pendingCode='';
   localStorage.removeItem('__autoLogin__');
   document.getElementById('loginOverlay').style.display='flex';
@@ -1245,6 +1271,9 @@ function setAnimal(type){
   emojiCache={};
   rebuildCache();
   render();
+  // 러너 즉시 갱신
+  const runnerPct = data.goal>0 ? Math.min(100,(data.currentBase+(data.records||[]).reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100) : 0;
+  updateProgressRunner(runnerPct);
   if(fbReady && currentUser) fbSaveUserData(currentUser);
 }
 
@@ -1577,7 +1606,9 @@ function updateCharacter(pct,isFirst){
     card.className='glass char-card neutral-bg'; setCharAura('none');
     label.className='char-status-label neutral'; label.textContent='저축을 시작해보세요!';
     message.className='char-message neutral'; message.textContent='목표를 설정하고 첫 수입을 기록해봐요 ✨';
-    badge.style.display='none'; showEmojiState(5); renderStateDots(5); return;
+    badge.style.display='none'; showEmojiState(5); renderStateDots(5);
+    updateProgressRunner(pct); // ← early return 전에 반드시 호출
+    return;
   }
   const delta=pct-prevPct;
   const isUp=delta>0.001, isDn=delta<-0.001;
@@ -1608,6 +1639,185 @@ function updateCharacter(pct,isFirst){
     badge.style.display='none';
   }
   if(!isFirst){ prevPct=pct; localStorage.setItem(uk('prevPct'),prevPct); }
+  updateProgressRunner(pct);
+}
+
+// ── 달성률 게이지 동물 러너 — 좌우 순찰 ──
+let _prX=0, _prDir=1, _prMax=0, _prSpd=1, _prTimer=null;
+
+function _patrolStep(){
+  _prX += _prSpd * _prDir;
+  if(_prX >= _prMax){ _prX = _prMax; _prDir = -1; }
+  if(_prX <= 0)     { _prX = 0;      _prDir =  1; }
+  const el = document.getElementById('progressRunner');
+  if(el) el.style.left = Math.round(_prX) + 'px';
+}
+
+function stopPatrol(){
+  if(_prTimer){ clearInterval(_prTimer); _prTimer = null; }
+}
+
+function updateProgressRunner(pct){
+  const runner = document.getElementById('progressRunner');
+  const fill   = document.getElementById('progressFill');
+  if(!runner || !fill) return;
+
+  const barEl = fill.parentElement;
+  let barW = barEl.offsetWidth || barEl.getBoundingClientRect().width;
+  if(!barW){ requestAnimationFrame(()=>updateProgressRunner(pct)); return; }
+
+  const clamp = Math.min(100, Math.max(0, pct));
+  _prPct = clamp;
+  // 순찰 끝점 = 달성률에 비례한 fill 끝
+  _prMax = (clamp / 100) * barW;
+  // 달성률별 속도 (px/frame, 60fps 기준)
+  _prSpd = clamp>=100?3.2 : clamp>=80?2.6 : clamp>=60?2.0 : clamp>=40?1.4 : clamp>=20?0.9 : 0.5;
+  // 순찰 범위 초기화 (범위가 줄면 현재 위치 클램프)
+  if(_prX > _prMax) _prX = _prMax;
+
+  // 표정 상태
+  const sid = clamp>=100?1:clamp>=80?2:clamp>=60?3:clamp>=40?4:clamp>=20?5:clamp>=1?6:7;
+
+  // 러너 크기 (달성률 높을수록 조금 더 크게)
+  const sz = 46 + Math.floor(clamp/100*16);
+  runner.style.width  = sz+'px';
+  runner.style.height = (sz+28)+'px';
+  runner.style.transition = 'none'; // rAF이 직접 제어하므로 CSS transition 제거
+
+  // SVG 업데이트
+  const svg = buildRunnerSVG(sid);
+  runner.innerHTML = svg+'<span class="progress-flag" id="progressFlag"'
+    +(clamp>=100?' style="display:inline"':'')+'>🚩</span>';
+
+  // 순찰 루프 시작/재시작 (setInterval — 백그라운드 탭에서도 동작)
+  if(!_prTimer) _prTimer = setInterval(_patrolStep, 16); // ~60fps
+}
+
+// 러너 전용 SVG — 몸통 + 달리는 다리 포함
+function buildRunnerSVG(sid){
+  const type   = animalType || 'cat';
+  const def    = ANIMAL_DEF[type] || ANIMAL_DEF.cat;
+  const mainC  = personColors?.hair  || def.main;
+  const bellyC = personColors?.skin  || def.belly;
+  const eyeC   = personColors?.eye   || def.eye;
+  const OL = '#1a1209';
+  const PINK = '#f4a8b8';
+
+  // 달성률별 달리기 속도 & 다리 흔들림 각도
+  const spd = sid===1?'.26s':sid===2?'.36s':sid<=4?'.52s':sid<=6?'.82s':'1.5s';
+  const ang = sid<=2?32:sid<=4?26:sid<=6?18:11;
+
+  const css=`
+.rb{animation:rBob ${spd} ease-in-out infinite;transform-origin:50px 52px}
+.ll{animation:legL ${spd} ease-in-out infinite;transform-origin:40px 80px}
+.rl{animation:legR ${spd} ease-in-out infinite;transform-origin:60px 80px}
+.la{animation:legR ${spd} ease-in-out infinite;transform-origin:34px 68px}
+.ra{animation:legL ${spd} ease-in-out infinite;transform-origin:66px 68px}
+@keyframes rBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes legL{0%,100%{transform:rotate(${-ang}deg)}50%{transform:rotate(${ang}deg)}}
+@keyframes legR{0%,100%{transform:rotate(${ang}deg)}50%{transform:rotate(${-ang}deg)}}`;
+
+  // 표정 — 눈
+  const ey=32;
+  const eyeSVG = sid<=2
+    ? `<path d="M27 ${ey+1} Q34 ${ey-9} 41 ${ey+1}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+       <ellipse cx="33" cy="${ey-5}" rx="2.8" ry="2.4" fill="white" opacity=".7"/>
+       <path d="M59 ${ey+1} Q66 ${ey-9} 73 ${ey+1}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+       <ellipse cx="65" cy="${ey-5}" rx="2.8" ry="2.4" fill="white" opacity=".7"/>`
+    : sid>=9
+    ? `<line x1="27" y1="${ey-6}" x2="41" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>
+       <line x1="41" y1="${ey-6}" x2="27" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>
+       <line x1="59" y1="${ey-6}" x2="73" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>
+       <line x1="73" y1="${ey-6}" x2="59" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>`
+    : `<circle cx="34" cy="${ey}" r="8" fill="white" stroke="${OL}" stroke-width="1.8"/>
+       <circle cx="34" cy="${ey+1}" r="5.5" fill="${eyeC}"/>
+       <circle cx="34" cy="${ey+1}" r="3.2" fill="#0a0606"/>
+       <ellipse cx="37" cy="${ey-3}" rx="2.5" ry="2.2" fill="white" opacity=".92"/>
+       <circle cx="66" cy="${ey}" r="8" fill="white" stroke="${OL}" stroke-width="1.8"/>
+       <circle cx="66" cy="${ey+1}" r="5.5" fill="${eyeC}"/>
+       <circle cx="66" cy="${ey+1}" r="3.2" fill="#0a0606"/>
+       <ellipse cx="69" cy="${ey-3}" rx="2.5" ry="2.2" fill="white" opacity=".92"/>`;
+
+  // 표정 — 입
+  const mouthSVG = sid<=4
+    ? `<path d="M37 50 Q50 58 63 50" stroke="${OL}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`
+    : sid<=7
+    ? `<path d="M40 52 L60 52" stroke="${OL}" stroke-width="2" stroke-linecap="round"/>`
+    : `<path d="M37 54 Q50 48 63 54" stroke="${OL}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+
+  // 홍조
+  const blush = sid<=4
+    ? `<ellipse cx="22" cy="43" rx="7.5" ry="5" fill="rgba(255,110,90,.22)"/>
+       <ellipse cx="78" cy="43" rx="7.5" ry="5" fill="rgba(255,110,90,.22)"/>` : '';
+
+  // 동물별 귀
+  let ears='';
+  if(type==='cat'){
+    ears=`<path d="M20 18 L25 0 L43 14Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M23 16 L27 4 L41 14Z" fill="${PINK}"/>
+          <path d="M80 18 L75 0 L57 14Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M77 16 L73 4 L59 14Z" fill="${PINK}"/>`;
+  } else if(type==='fox'){
+    ears=`<path d="M15 20 L21 0 L43 12Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M19 18 L24 3 L41 12Z" fill="${PINK}"/>
+          <path d="M85 20 L79 0 L57 12Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M81 18 L76 3 L59 12Z" fill="${PINK}"/>`;
+  } else if(type==='dog'){
+    ears=`<ellipse cx="16" cy="28" rx="12" ry="19" fill="${mainC}" stroke="${OL}" stroke-width="2" transform="rotate(-8 16 28)"/>
+          <ellipse cx="16" cy="28" rx="7" ry="12" fill="${bellyC}" opacity=".6" transform="rotate(-8 16 28)"/>
+          <ellipse cx="84" cy="28" rx="12" ry="19" fill="${mainC}" stroke="${OL}" stroke-width="2" transform="rotate(8 84 28)"/>
+          <ellipse cx="84" cy="28" rx="7" ry="12" fill="${bellyC}" opacity=".6" transform="rotate(8 84 28)"/>`;
+  } else if(type==='hamster'){
+    ears=`<circle cx="26" cy="12" r="13" fill="${mainC}" stroke="${OL}" stroke-width="2"/>
+          <circle cx="26" cy="12" r="8" fill="${PINK}"/>
+          <circle cx="74" cy="12" r="13" fill="${mainC}" stroke="${OL}" stroke-width="2"/>
+          <circle cx="74" cy="12" r="8" fill="${PINK}"/>`;
+  } else if(type==='horse'){
+    ears=`<path d="M26 20 L30 0 L48 16Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M28 18 L32 4 L46 16Z" fill="${PINK}"/>
+          <path d="M74 20 L70 0 L52 16Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M72 18 L68 4 L54 16Z" fill="${PINK}"/>
+          <path d="M28 12 Q50 4 72 12 Q62 0 50 -2 Q38 0 28 12Z" fill="${mainC}" stroke="${OL}" stroke-width="1.5"/>`;
+  }
+
+  return `<svg viewBox="0 0 100 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs><style>${css}</style></defs>
+  <g class="rb">
+    <!-- 팔 (달리기 반대 방향으로 흔들림) -->
+    <g class="la">
+      <path d="M34 68 Q26 76 22 84" stroke="${mainC}" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse cx="21" cy="85" rx="7" ry="4.5" fill="${mainC}" stroke="${OL}" stroke-width="1.5"/>
+    </g>
+    <g class="ra">
+      <path d="M66 68 Q74 76 78 84" stroke="${mainC}" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse cx="79" cy="85" rx="7" ry="4.5" fill="${mainC}" stroke="${OL}" stroke-width="1.5"/>
+    </g>
+    <!-- 몸통 -->
+    <ellipse cx="50" cy="72" rx="18" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="50" cy="74" rx="12" ry="9" fill="${bellyC}"/>
+    <!-- 귀 -->
+    ${ears}
+    <!-- 머리 -->
+    <circle cx="50" cy="34" r="28" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+    <ellipse cx="50" cy="44" rx="17" ry="14" fill="${bellyC}"/>
+    <!-- 표정 -->
+    ${eyeSVG}
+    <ellipse cx="50" cy="50" rx="5" ry="4" fill="${type==='dog'?OL:'#e88a9a'}"/>
+    ${mouthSVG}
+    ${blush}
+    <!-- 다리 — 반대 방향으로 교대 스윙 (달리기) -->
+    <g class="ll">
+      <path d="M40 80 Q32 93 29 106" stroke="${mainC}" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <ellipse cx="28" cy="107" rx="9" ry="5" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
+      <ellipse cx="28" cy="106" rx="5.5" ry="3" fill="${bellyC}"/>
+    </g>
+    <g class="rl">
+      <path d="M60 80 Q68 93 71 106" stroke="${mainC}" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <ellipse cx="72" cy="107" rx="9" ry="5" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
+      <ellipse cx="72" cy="106" rx="5.5" ry="3" fill="${bellyC}"/>
+    </g>
+  </g>
+</svg>`;
 }
 
 function spawnFX(container, sid){
@@ -2053,6 +2263,13 @@ function initApp(){
   populateRecDaySelect();
   renderRecurring();
   updateCategorySelect('income');
+  // 창 크기 바뀔 때 러너 위치 재계산
+  window.addEventListener('resize', ()=>{
+    const pct = data.goal>0
+      ? Math.min(100,(data.currentBase + data.records.reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100)
+      : 0;
+    updateProgressRunner(pct);
+  });
 }
 
 // ── 시작 시 Firebase 초기화 + 자동 로그인 체크 ──
