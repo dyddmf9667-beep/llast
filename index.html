@@ -373,33 +373,57 @@
     /* ══ 모바일 최적화 ══════════════════════════════════════════════ */
     @media(max-width:600px){
       /* 배경 블러 경량화 (성능) */
-      body{padding:14px 10px 52px}
-      body::before{width:280px;height:280px;filter:blur(50px);opacity:.3}
-      body::after {width:220px;height:220px;filter:blur(50px);opacity:.3}
+      body{padding:12px 10px 52px}
+      body::before{width:260px;height:260px;filter:blur(50px);opacity:.28}
+      body::after {width:200px;height:200px;filter:blur(50px);opacity:.28}
 
-      /* 카드 패딩 축소 */
-      .glass{padding:18px 15px;border-radius:20px}
-      .char-card{padding:16px 14px}
+      /* 카드 패딩 */
+      .glass{padding:16px 14px;border-radius:20px}
+      .char-card{padding:16px 12px;gap:10px}
 
       /* 헤더 */
-      .title-text{font-size:1.25rem}
-      .header-date{font-size:.76rem}
-      .user-chip-name{font-size:.72rem;padding:3px 8px}
-      .logout-btn{font-size:.68rem;padding:4px 10px}
+      .header{gap:8px;flex-wrap:wrap;align-items:center}
+      .title-text{font-size:1.2rem}
+      .header-date{font-size:.72rem;line-height:1.3;max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      .user-chip{gap:5px;flex-wrap:nowrap}
+      .user-chip-name{font-size:.7rem;padding:3px 7px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .logout-btn{font-size:.68rem;padding:4px 9px;white-space:nowrap}
 
       /* 캐릭터 */
-      .emoji-stage{width:154px;height:182px}
-      .char-message{font-size:.88rem}
-      .char-state-grid{gap:4px}
-      .state-dot{width:24px;height:24px;font-size:.72rem}
+      .emoji-stage{width:148px;height:174px}
+      .char-message{font-size:.86rem;word-break:keep-all;line-height:1.55}
+      .char-status-label{font-size:.72rem;padding:3px 12px}
+      .char-state-grid{gap:4px;max-width:280px}
+      .state-dot{width:24px;height:24px;font-size:.7rem}
+
+      /* 동물 선택 */
+      .animal-picker{gap:6px}
+      .animal-btn{width:38px;height:38px;font-size:1.15rem}
+
+      /* 업로드 필 */
+      .upload-pill{font-size:.78rem;padding:7px 14px}
 
       /* 진행도 카드 */
-      .compare-box{padding:10px 8px}
-      .compare-box .cb-label{font-size:.66rem}
-      .compare-box .cb-value{font-size:1.15rem}
-      .progress-pct{font-size:1.3rem}
-      .breakdown-row{padding:8px 10px;gap:5px;font-size:.74rem}
+      .compare-row{gap:0}
+      .compare-box{padding:10px 6px}
+      .compare-box .cb-label{font-size:.62rem;letter-spacing:.4px}
+      .compare-box .cb-value{font-size:1.05rem;letter-spacing:-.3px;word-break:break-all;overflow-wrap:anywhere}
+      .compare-vs{font-size:.78rem;padding:0 6px;white-space:nowrap}
+      .progress-track{padding-top:72px}
+      .progress-runner{height:76px}
+      .progress-pct{font-size:1.25rem;margin-top:8px}
+      .breakdown-row{padding:8px 10px;gap:4px 8px;font-size:.72rem}
+      .bd-item{gap:3px}
       .setup-row{gap:8px}
+
+      /* 주간예산 */
+      .wb-stats{grid-template-columns:repeat(3,1fr);gap:6px}
+      .wb-stat{padding:9px 5px}
+      .wb-stat-label{font-size:.6rem;letter-spacing:.4px}
+      .wb-stat-value{font-size:.88rem;word-break:break-all}
+      .wb-bar-label{font-size:.7rem}
+      .wb-title{font-size:.92rem}
+      .wb-days-badge{font-size:.7rem;padding:2px 9px}
 
       /* 폼 */
       .pill-input{padding:9px 14px;font-size:.88rem}
@@ -408,61 +432,73 @@
       .btn{padding:9px 18px;font-size:.85rem}
 
       /* 거래 내역 */
-      .log-list{max-height:none} /* 모바일은 페이지 스크롤 사용 */
-      .log-item{padding:11px 12px;gap:10px;border-radius:14px}
-      .log-desc{font-size:.84rem}
-      .log-amount{font-size:.9rem}
-      .log-del{width:34px;height:34px} /* 터치 영역 확대 */
-      .log-icon{width:34px;height:34px;border-radius:10px}
+      .log-list{max-height:none}
+      .log-item{padding:11px 11px;gap:9px;border-radius:13px}
+      .log-desc{font-size:.83rem}
+      .log-amount{font-size:.88rem}
+      .log-del{width:36px;height:36px;min-width:36px}
+      .log-icon{width:34px;height:34px;border-radius:10px;flex-shrink:0}
 
       /* 달력 */
       .cal-grid{gap:2px}
-      .cal-day{min-height:54px;padding:3px 2px;border-radius:9px}
-      .cal-day-num{font-size:.7rem}
-      .cal-amt{font-size:.62rem}
+      .cal-day{min-height:52px;padding:3px 2px;border-radius:9px}
+      .cal-day-num{font-size:.68rem}
+      .cal-amt{font-size:.6rem}
       .cal-dots{gap:1px}
-      .cal-dot{width:5px;height:5px}
-      .day-detail-header{padding:11px 14px 9px}
-      .day-detail-title{font-size:.84rem}
-      .day-detail-summary{gap:8px;font-size:.74rem}
-      .day-detail-items{padding:8px 14px 12px}
+      .cal-dot{width:4px;height:4px}
+      .day-detail-header{padding:11px 13px 9px}
+      .day-detail-title{font-size:.83rem}
+      .day-detail-summary{gap:8px;font-size:.73rem}
+      .day-detail-items{padding:8px 13px 12px}
 
       /* 정기결제 */
+      .rec-summary{gap:7px}
       .rec-form{grid-template-columns:1fr 1fr;gap:7px}
-      .rec-stat .rs-value{font-size:.98rem}
-      .rec-stat .rs-label{font-size:.62rem}
-      .rec-item{padding:10px 11px;gap:9px;border-radius:13px}
-      .rec-name{font-size:.84rem}
-      .rec-del-btn{width:34px;height:34px} /* 터치 영역 확대 */
-      .rec-amount{font-size:.9rem}
-      .rec-pay-btn{padding:6px 10px;font-size:.72rem}
+      .rec-stat{padding:10px 8px;min-width:80px}
+      .rec-stat .rs-value{font-size:.95rem}
+      .rec-stat .rs-label{font-size:.6rem}
+      .rec-item{padding:10px 10px;gap:8px;border-radius:13px}
+      .rec-name{font-size:.83rem}
+      .rec-del-btn{width:34px;height:34px;min-width:34px}
+      .rec-amount{font-size:.88rem}
+      .rec-pay-btn{padding:6px 9px;font-size:.72rem;white-space:nowrap}
 
       /* 로그인/인증 */
-      .auth-view{padding:22px 16px;gap:13px;max-width:100%}
-      .auth-title{font-size:1.3rem}
-      .pin-btn{height:52px;border-radius:12px}
+      .auth-view{padding:20px 16px;gap:12px;max-width:100%}
+      .auth-title{font-size:1.25rem}
+      .auth-sub{font-size:.78rem}
+      .pin-btn{height:52px;border-radius:12px;font-size:1.15rem}
       .pin-pad{gap:8px}
       .code-digits{font-size:2.2rem;letter-spacing:8px}
 
-      /* 토스트 알림 (하단 전체 너비) */
+      /* 토스트 */
       .toast-wrap{bottom:12px;right:10px;left:10px}
       .toast{text-align:center;font-size:.84rem;padding:10px 16px}
     }
 
-    @media(max-width:380px){
+    @media(max-width:400px){
+      .glass{padding:14px 11px;border-radius:18px}
       body{padding:10px 8px 44px}
-      .glass{padding:14px 12px;border-radius:18px}
-      .emoji-stage{width:136px;height:160px}
+      .emoji-stage{width:132px;height:156px}
       .title-text{font-size:1.1rem}
-      .compare-box .cb-value{font-size:1rem}
+      .header-date{display:none} /* 극소폭 화면: 날짜 숨김 */
+      /* 진행도 금액 */
+      .compare-box .cb-value{font-size:.95rem}
       .progress-pct{font-size:1.1rem}
+      /* 주간예산 — 2+1 레이아웃 */
+      .wb-stats{grid-template-columns:1fr 1fr}
+      .wb-stats .wb-stat:last-child{grid-column:1 / -1}
+      .wb-stat-value{font-size:.85rem}
+      /* 인증 */
       .pin-btn{height:46px;font-size:1.05rem}
       .pin-pad{gap:6px}
       .state-dot{width:22px;height:22px;font-size:.65rem}
-      .cal-day{min-height:48px}
-      .cal-day-num{font-size:.64rem}
-      .auth-view{padding:18px 14px;gap:11px}
-      .rec-stat{padding:10px 10px}
+      .cal-day{min-height:46px}
+      .cal-day-num{font-size:.62rem}
+      .auth-view{padding:16px 12px;gap:10px}
+      .rec-stat{padding:9px 7px}
+      .animal-btn{width:36px;height:36px;font-size:1.1rem}
+      .char-message{font-size:.82rem}
     }
   </style>
 </head>
@@ -600,7 +636,7 @@
       <span class="title-text" id="titleText" onclick="startEditTitle()"></span>
       <input class="title-input" id="titleInput" style="display:none" onblur="saveTitle()" onkeydown="if(event.key==='Enter')saveTitle()"/>
     </div>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:1;min-width:0">
       <span class="header-date" id="todayDate"></span>
       <div class="user-chip" id="userChip" style="display:none">
         <span class="sync-dot offline" id="syncDot" title="동기화 상태"></span>
@@ -2465,62 +2501,4 @@ function initApp(){
   });
 }
 
-// ── 시작 시 Firebase 초기화 + 자동 로그인 체크 ──
-(async function(){
-  try {
-    const todayEl = document.getElementById('todayDate');
-    if(todayEl) todayEl.textContent =
-      new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
-
-    // Firebase 초기화 (연결 테스트 포함)
-    await fbInit();
-
-    // Firebase 연결 시 — 사용자 목록 동기화 (다른 기기에서 가입한 계정도 로그인 가능)
-    if(fbReady){
-      try {
-        showFbLoading('연결 중...');
-        const fbUsers = await fbGetUsers();
-        hideFbLoading();
-        if(fbUsers && Object.keys(fbUsers).length > 0){
-          const localUsers = getUsers();
-          const merged = Object.assign({}, localUsers, fbUsers);
-          saveUsers(merged);
-        }
-      } catch(syncErr){
-        hideFbLoading();
-        console.warn('[INIT] 사용자 목록 동기화 오류:', syncErr);
-      }
-    }
-
-    const autoData=JSON.parse(localStorage.getItem('__autoLogin__')||'null');
-    const users=getUsers();
-
-    if(autoData && users[autoData.code]){
-      // 자동 로그인 데이터 유효 → 1단계 건너뛰고 2단계로
-      pendingCode=autoData.code;
-      const uname=users[autoData.code].name||'';
-      const subEl = document.getElementById('loginSubText');
-      if(subEl) subEl.textContent=(uname?uname+'님, ':'')+'4자리 인증번호를 입력하세요';
-      showView('viewLogin');
-    } else {
-      // 자동 로그인 없음 → 1단계 로그인
-      showView('viewStage1');
-    }
-  } catch(fatalErr){
-    // 치명적 오류 발생 시 기본 로그인 화면으로 폴백
-    console.error('[INIT] 치명적 오류:', fatalErr);
-    hideFbLoading();
-    try { showView('viewStage1'); } catch(e){}
-  }
-})();
-</script>
-
-<!-- Firebase 로딩 오버레이 -->
-<div id="fbLoading" class="fb-loading" style="display:none">
-  <div class="fb-loading-card">
-    <div class="fb-spinner"></div>
-    <div class="fb-loading-text" id="fbLoadingText">연결 중...</div>
-  </div>
-</div>
-</body>
-</html>
+// ── 시작 시 Firebase 초기화 + 자동 로그인
