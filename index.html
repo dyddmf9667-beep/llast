@@ -1423,116 +1423,205 @@ const ANIMAL_DEF = {
 };
 
 function buildEmoji(sid,colors){
-  // ── 색상 팔레트 — personColors + 동물별 기본값 ──
+  // ── 색상 팔레트 ──
   const type   = animalType || 'cat';
   const def    = ANIMAL_DEF[type] || ANIMAL_DEF.cat;
   const mainC  = colors?.hair  || def.main;
   const bellyC = colors?.skin  || def.belly;
   const eyeC   = colors?.eye   || def.eye;
-  const OL     = '#1a1209';
+  const OL     = '#2a1a10';
   const PINK   = '#f4a8b8';
-  const NOSE   = '#e88a9a';                  // 코
+  const NOSE   = '#e88a9a';
+
+  // ── 색상 유틸 (밝게/어둡게) ──
+  const hl=(h,a)=>{
+    h=h.replace('#','');
+    if(h.length===3)h=h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    const n=(s)=>Math.max(0,Math.min(255,parseInt(h.substr(s,2),16)+Math.round(a*255))).toString(16).padStart(2,'0');
+    return `#${n(0)}${n(2)}${n(4)}`;
+  };
+  const dk=(h,a)=>hl(h,-a);
+  const uid=`${sid}${type}`;
 
   // ── 상태별 애니메이션 ──
   const [aN,aD] =
-    sid===1 ? ['bounce','.55s'] :
-    sid===2 ? ['bounce','.75s'] :
-    sid<=4  ? ['bob',   '1.0s'] :
-    sid<=6  ? ['sway',  '1.8s'] :
-    sid<=8  ? ['droop', '2.4s'] :
-             ['slump', '3.0s'];
+    sid===1 ? ['bounce','.5s'] :
+    sid===2 ? ['bounce','.7s'] :
+    sid<=4  ? ['bob',  '1.0s'] :
+    sid<=6  ? ['sway', '1.8s'] :
+    sid<=8  ? ['droop','2.4s'] :
+             ['slump','3.0s'];
+  const twag=sid<=3?'.7s':sid<=5?'1.8s':'3.5s';
+  const trot=sid<=3?14:5;
 
   const css=`
-.hb{animation:${aN} ${aD} ease-in-out infinite;transform-origin:80px 98px}
+.hb{animation:${aN} ${aD} cubic-bezier(.4,0,.2,1) infinite;transform-origin:80px 95px}
 .tl{animation:tf 2s .2s ease-in infinite}
 .tr{animation:tf 2s 1.0s ease-in infinite}
-@keyframes bounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-11px) rotate(2deg)}}
-@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.tw{animation:tailW ${twag} ease-in-out infinite;transform-origin:130px 168px}
+@keyframes bounce{
+  0%,100%{transform:translateY(0) rotate(-1.5deg) scaleY(1)}
+  42%{transform:translateY(-13px) rotate(1.5deg) scaleY(1.05)}
+  55%{transform:translateY(-10px) rotate(.5deg) scaleY(1.02)}
+  82%{transform:translateY(-1px) scaleY(.97)}
+}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 @keyframes sway{0%,100%{transform:rotate(0)}50%{transform:rotate(-2deg)}}
-@keyframes droop{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
-@keyframes slump{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(5px) rotate(-3deg)}}
-@keyframes tf{0%{transform:translateY(0);opacity:.9}100%{transform:translateY(54px);opacity:0}}`;
+@keyframes droop{0%,100%{transform:translateY(0)}50%{transform:translateY(4px)}}
+@keyframes slump{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(6px) rotate(-3deg)}}
+@keyframes tf{0%{transform:translateY(0);opacity:.9}100%{transform:translateY(54px);opacity:0}}
+@keyframes tailW{0%,100%{transform:rotate(-${trot}deg)}50%{transform:rotate(${trot}deg)}}`;
+
   // ── 배경 글로우 ──
   const bgFX={
-    1:`<circle cx="80" cy="98" r="80" fill="rgba(255,220,50,.10)"/>`,
-    2:`<circle cx="80" cy="98" r="76" fill="rgba(60,220,160,.08)"/>`,
-    9:`<circle cx="80" cy="98" r="74" fill="rgba(120,130,150,.09)"/>`,
-   10:`<circle cx="80" cy="98" r="74" fill="rgba(80,90,110,.11)"/>`,
+    1:`<circle cx="80" cy="98" r="80" fill="rgba(255,220,50,.12)"/>`,
+    2:`<circle cx="80" cy="98" r="76" fill="rgba(60,220,160,.10)"/>`,
+    9:`<circle cx="80" cy="98" r="74" fill="rgba(120,130,150,.10)"/>`,
+   10:`<circle cx="80" cy="98" r="74" fill="rgba(80,90,110,.12)"/>`,
   }[sid]||'';
 
-  // ── 눈 빌더 ──
+  // ── SVG 그라디언트 & 필터 ──
+  const defs=`<defs>
+  <style>${css}</style>
+  <radialGradient id="hG${uid}" cx="38%" cy="28%" r="68%">
+    <stop offset="0%" stop-color="${hl(mainC,.38)}"/>
+    <stop offset="65%" stop-color="${mainC}"/>
+    <stop offset="100%" stop-color="${dk(mainC,.14)}"/>
+  </radialGradient>
+  <radialGradient id="bG${uid}" cx="36%" cy="26%" r="68%">
+    <stop offset="0%" stop-color="${hl(mainC,.28)}"/>
+    <stop offset="100%" stop-color="${dk(mainC,.1)}"/>
+  </radialGradient>
+  <radialGradient id="vG${uid}" cx="50%" cy="28%" r="65%">
+    <stop offset="0%" stop-color="${hl(bellyC,.28)}"/>
+    <stop offset="100%" stop-color="${bellyC}"/>
+  </radialGradient>
+  <radialGradient id="eG${uid}" cx="36%" cy="28%" r="65%">
+    <stop offset="0%" stop-color="${hl(eyeC,.5)}"/>
+    <stop offset="55%" stop-color="${eyeC}"/>
+    <stop offset="100%" stop-color="${dk(eyeC,.25)}"/>
+  </radialGradient>
+  <radialGradient id="earG${uid}" cx="44%" cy="32%" r="62%">
+    <stop offset="0%" stop-color="${hl(mainC,.25)}"/>
+    <stop offset="100%" stop-color="${mainC}"/>
+  </radialGradient>
+  <filter id="blr${uid}" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="4"/>
+  </filter>
+  <filter id="sft${uid}" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="2"/>
+  </filter>
+  <filter id="dsh${uid}" x="-15%" y="-10%" width="130%" height="130%">
+    <feDropShadow dx="0" dy="5" stdDeviation="6" flood-color="#1a0a05" flood-opacity="0.16"/>
+  </filter>
+</defs>`;
+
+  // ── 눈 ──
   const lx=58, rx_=102, ey=80;
 
-  // 행복한 ^ω^ 눈 (초승달 모양)
   const happyEye=(cx)=>`
-    <path d="M${cx-16} ${ey+3} Q${cx} ${ey-14} ${cx+16} ${ey+3}" stroke="${OL}" stroke-width="5" fill="none" stroke-linecap="round"/>
-    <ellipse cx="${cx+6}" cy="${ey-5}" rx="4.5" ry="4" fill="white" opacity=".8"/>`;
+    <path d="M${cx-15} ${ey+4} Q${cx} ${ey-16} ${cx+15} ${ey+4}" stroke="${OL}" stroke-width="5.5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="${cx+6}" cy="${ey-3}" rx="5" ry="4" fill="white" opacity=".78"/>`;
 
-  // 보통 눈 (크고 반짝이는)
-  const normalEye=(cx)=>`
-    <circle cx="${cx}" cy="${ey}" r="17" fill="white" stroke="${OL}" stroke-width="2.6"/>
-    <circle cx="${cx}" cy="${ey+1}" r="13" fill="${eyeC}"/>
-    <circle cx="${cx}" cy="${ey+1}" r="8"  fill="#0a0606"/>
-    <ellipse cx="${cx+5.5}" cy="${ey-6}" rx="5" ry="4.5" fill="white" opacity=".92"/>
-    <ellipse cx="${cx-4}"   cy="${ey+4}" rx="2.5" ry="2" fill="white" opacity=".4"/>`;
+  const eyeInner=(cx)=>`
+    <circle cx="${cx}" cy="${ey}" r="17" fill="white"/>
+    <circle cx="${cx}" cy="${ey}" r="16.5" fill="none" stroke="${OL}" stroke-width="1.8"/>
+    <circle cx="${cx}" cy="${ey+1}" r="12.5" fill="url(#eG${uid})"/>
+    <circle cx="${cx}" cy="${ey+1}" r="7.5" fill="${dk(eyeC,.35)}" opacity=".85"/>
+    <circle cx="${cx}" cy="${ey+1}" r="5.5" fill="#0d0608"/>
+    <circle cx="${cx}" cy="${ey+1}" r="12.5" fill="none" stroke="${dk(eyeC,.28)}" stroke-width="2" opacity=".5"/>
+    <ellipse cx="${cx+5}" cy="${ey-6}" rx="4.8" ry="4.2" fill="white" opacity=".95"/>
+    <ellipse cx="${cx+5.5}" cy="${ey-6.5}" rx="2.5" ry="2.2" fill="white"/>
+    <ellipse cx="${cx-5}" cy="${ey+5.5}" rx="2.5" ry="2" fill="white" opacity=".4"/>`;
 
-  // 슬픈 눈 (축 처진 눈꺼풀)
+  const normalEye=(cx)=>`<g>${eyeInner(cx)}</g>`;
+
   const sadEye=(cx)=>`
-    ${normalEye(cx)}
-    <path d="M${cx-16} ${ey-9} Q${cx+3} ${ey+4} ${cx+15} ${ey-2}" stroke="${OL}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+    <g>
+      ${eyeInner(cx)}
+      <path d="M${cx-16} ${ey-8} Q${cx+2} ${ey+6} ${cx+15} ${ey-2}" fill="${mainC}"/>
+      <path d="M${cx-16} ${ey-8} Q${cx+2} ${ey+6} ${cx+15} ${ey-2}" stroke="${OL}" stroke-width="4.5" fill="none" stroke-linecap="round"/>
+    </g>`;
 
-  // X 눈
   const xEye=(cx)=>`
-    <line x1="${cx-12}" y1="${ey-12}" x2="${cx+12}" y2="${ey+12}" stroke="${OL}" stroke-width="6" stroke-linecap="round"/>
-    <line x1="${cx+12}" y1="${ey-12}" x2="${cx-12}" y2="${ey+12}" stroke="${OL}" stroke-width="6" stroke-linecap="round"/>`;
+    <g>
+      <line x1="${cx-12}" y1="${ey-12}" x2="${cx+12}" y2="${ey+12}" stroke="${OL}" stroke-width="7" stroke-linecap="round"/>
+      <line x1="${cx+12}" y1="${ey-12}" x2="${cx-12}" y2="${ey+12}" stroke="${OL}" stroke-width="7" stroke-linecap="round"/>
+      <line x1="${cx-12}" y1="${ey-12}" x2="${cx+12}" y2="${ey+12}" stroke="rgba(255,255,255,.28)" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="${cx+12}" y1="${ey-12}" x2="${cx-12}" y2="${ey+12}" stroke="rgba(255,255,255,.28)" stroke-width="2.5" stroke-linecap="round"/>
+    </g>`;
 
   // ── 눈썹 ──
+  const browHappy=`
+    <path d="M${lx-11} ${ey-25} Q${lx} ${ey-30} ${lx+11} ${ey-25}" stroke="${OL}" stroke-width="3.2" fill="none" stroke-linecap="round" opacity=".65"/>
+    <path d="M${rx_-11} ${ey-25} Q${rx_} ${ey-30} ${rx_+11} ${ey-25}" stroke="${OL}" stroke-width="3.2" fill="none" stroke-linecap="round" opacity=".65"/>`;
   const browWorried=`
-    <path d="M${lx-13} ${ey-24} Q${lx}   ${ey-18} ${lx+13} ${ey-24}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <path d="M${rx_-13} ${ey-24} Q${rx_} ${ey-18} ${rx_+13} ${ey-24}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    <path d="M${lx-12} ${ey-24} Q${lx+2} ${ey-17} ${lx+12} ${ey-24}" stroke="${OL}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path d="M${rx_-12} ${ey-24} Q${rx_+2} ${ey-17} ${rx_+12} ${ey-24}" stroke="${OL}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
   const browSad=`
-    <path d="M${lx-13} ${ey-20} Q${lx}   ${ey-14} ${lx+13} ${ey-20}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>
-    <path d="M${rx_-13} ${ey-20} Q${rx_} ${ey-14} ${rx_+13} ${ey-20}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+    <path d="M${lx-12} ${ey-20} Q${lx+2} ${ey-13} ${lx+12} ${ey-20}" stroke="${OL}" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    <path d="M${rx_-12} ${ey-20} Q${rx_+2} ${ey-13} ${rx_+12} ${ey-20}" stroke="${OL}" stroke-width="3.5" fill="none" stroke-linecap="round"/>`;
 
   // ── 입 ──
   const my=122;
   const mouths={
-    grin:    `<path d="M58 ${my} Q80 ${my+20} 102 ${my}" stroke="${OL}" stroke-width="3" stroke-linecap="round" fill="rgba(200,60,80,.55)"/>
-              <path d="M62 ${my+5} Q80 ${my+18} 98 ${my+5}" fill="rgba(200,60,80,.45)"/>`,
-    smile:   `<path d="M62 ${my} Q80 ${my+14} 98 ${my}" stroke="${OL}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
-    slight:  `<path d="M68 ${my} Q80 ${my+8}  92 ${my}" stroke="${OL}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
-    neutral: `<path d="M68 ${my+4} L92 ${my+4}" stroke="${OL}" stroke-width="2.4" stroke-linecap="round"/>`,
-    frown_s: `<path d="M68 ${my+8} Q80 ${my+2} 92 ${my+8}" stroke="${OL}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
-    frown:   `<path d="M62 ${my+10} Q80 ${my+2} 98 ${my+10}" stroke="${OL}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
-    frown_b: `<path d="M55 ${my+13} Q80 ${my}  105 ${my+13}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`,
+    grin:   `<path d="M55 ${my} Q80 ${my+22} 105 ${my}" stroke="${OL}" stroke-width="3" stroke-linecap="round" fill="rgba(190,50,70,.5)"/>
+             <path d="M60 ${my+4} Q80 ${my+20} 100 ${my+4}" fill="rgba(190,50,70,.4)"/>
+             <ellipse cx="65" cy="${my+5}" rx="4.5" ry="3.5" fill="rgba(255,255,255,.55)"/>`,
+    smile:  `<path d="M62 ${my} Q80 ${my+15} 98 ${my}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`,
+    slight: `<path d="M68 ${my} Q80 ${my+9} 92 ${my}" stroke="${OL}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+    neutral:`<path d="M68 ${my+4} L92 ${my+4}" stroke="${OL}" stroke-width="2.5" stroke-linecap="round"/>`,
+    frown_s:`<path d="M68 ${my+9} Q80 ${my+3} 92 ${my+9}" stroke="${OL}" stroke-width="2.5" fill="none" stroke-linecap="round"/>`,
+    frown:  `<path d="M62 ${my+11} Q80 ${my+3} 98 ${my+11}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`,
+    frown_b:`<path d="M54 ${my+14} Q80 ${my+1} 106 ${my+14}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>`,
   };
 
-  // ── 홍조 ──
-  const cheekBig  =`<ellipse cx="40" cy="104" rx="18" ry="11" fill="rgba(255,110,90,.22)"/><ellipse cx="120" cy="104" rx="18" ry="11" fill="rgba(255,110,90,.22)"/>`;
-  const cheekLight=`<ellipse cx="42" cy="106" rx="14" ry="9"  fill="rgba(255,110,90,.14)"/><ellipse cx="118" cy="106" rx="14" ry="9"  fill="rgba(255,110,90,.14)"/>`;
+  // ── 홍조 (블러로 자연스럽게) ──
+  const cheekBig  =`
+    <ellipse cx="39"  cy="104" rx="21" ry="14" fill="rgba(255,95,80,.25)" filter="url(#blr${uid})"/>
+    <ellipse cx="121" cy="104" rx="21" ry="14" fill="rgba(255,95,80,.25)" filter="url(#blr${uid})"/>`;
+  const cheekLight=`
+    <ellipse cx="41"  cy="106" rx="17" ry="11" fill="rgba(255,95,80,.15)" filter="url(#blr${uid})"/>
+    <ellipse cx="119" cy="106" rx="17" ry="11" fill="rgba(255,95,80,.15)" filter="url(#blr${uid})"/>`;
 
   // ── 눈물 ──
   const tearsEl=`
-    <ellipse class="tl" cx="40"  cy="96" rx="5.5" ry="8" fill="rgba(100,170,255,.88)"/>
-    <ellipse class="tr" cx="120" cy="96" rx="5.5" ry="8" fill="rgba(100,170,255,.88)"/>`;
+    <ellipse class="tl" cx="40"  cy="96" rx="5" ry="8.5" fill="rgba(110,180,255,.92)"/>
+    <ellipse class="tr" cx="120" cy="96" rx="5" ry="8.5" fill="rgba(110,180,255,.92)"/>`;
 
-  // ── 상태별 감정 조합 (공통) ──
+  // ── 공통 몸통 (그라디언트) ──
+  const gndShadow=`<ellipse cx="80" cy="200" rx="52" ry="7" fill="rgba(0,0,0,.12)" filter="url(#sft${uid})"/>`;
+  const body=`
+    <ellipse cx="80" cy="164" rx="48" ry="32" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.5"/>
+    <ellipse cx="80" cy="165" rx="34" ry="23" fill="url(#vG${uid})"/>
+    <ellipse cx="68" cy="147" rx="15" ry="9"  fill="white" opacity=".1"/>`;
+  const arms=`
+    <path d="M32 148 Q15 156 15 171 Q15 185 32 186 Q51 186 52 170 Q52 158 32 148Z" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.3"/>
+    <ellipse cx="26"  cy="182" rx="14" ry="9" fill="url(#vG${uid})"/>
+    <path d="M128 148 Q145 156 145 171 Q145 185 128 186 Q109 186 108 170 Q108 158 128 148Z" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.3"/>
+    <ellipse cx="134" cy="182" rx="14" ry="9" fill="url(#vG${uid})"/>`;
+  const legs=`
+    <ellipse cx="56"  cy="192" rx="24" ry="13" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="56"  cy="191" rx="16" ry="8"  fill="url(#vG${uid})"/>
+    <ellipse cx="104" cy="192" rx="24" ry="13" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="104" cy="191" rx="16" ry="8"  fill="url(#vG${uid})"/>`;
+
+  // ── 상태별 감정 조합 ──
   let eyesEl, browEl='', mouthEl, cheekEl='', extraEl='', tearEl='';
   if(sid===1){
-    eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
-    extraEl=`<g style="animation:bounce .55s ease-in-out infinite;transform-origin:80px 22px">
-      <path d="M60 46 L68 20 L80 40 L92 20 L100 46Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.8" stroke-linejoin="round"/>
-      <circle cx="60" cy="46" r="3.8" fill="#ef4444"/>
-      <circle cx="80" cy="42" r="4.4" fill="#60a5fa"/>
-      <circle cx="100" cy="46" r="3.8" fill="#ef4444"/>
+    browEl=browHappy; eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
+    extraEl=`<g style="animation:bounce .5s ease-in-out infinite;transform-origin:80px 22px">
+      <path d="M60 46 L68 20 L80 40 L92 20 L100 46Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="60" cy="46" r="4" fill="#ef4444"/><circle cx="80" cy="42" r="4.5" fill="#60a5fa"/><circle cx="100" cy="46" r="4" fill="#ef4444"/>
+      <ellipse cx="80" cy="33" rx="6" ry="3" fill="rgba(255,255,255,.4)"/>
     </g>
     <text x="2" y="44" font-size="18">✨</text><text x="132" y="44" font-size="18">✨</text>
     <text x="4" y="200" font-size="16">🎉</text><text x="126" y="200" font-size="16">🎊</text>`;
   } else if(sid===2){
-    eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
+    browEl=browHappy; eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
     extraEl=`<text x="4" y="46" font-size="18">💚</text><text x="132" y="46" font-size="18">💚</text>`;
   } else if(sid===3){
-    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekBig;
+    browEl=browHappy; eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekBig;
   } else if(sid===4){
     eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekLight;
   } else if(sid===5){
@@ -1554,138 +1643,162 @@ function buildEmoji(sid,colors){
   // ══════════════════════════════════════════════════════════
   //  동물별 신체 구조
   // ══════════════════════════════════════════════════════════
-  // 공통 몸통·팔·다리
-  const body=`
-    <ellipse cx="80" cy="164" rx="48" ry="32" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
-    <ellipse cx="80" cy="166" rx="34" ry="23" fill="${bellyC}"/>`;
-  const arms=`
-    <path d="M32 148 Q16 156 16 170 Q16 182 32 184 Q50 184 52 170 Q52 158 32 148Z" fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
-    <ellipse cx="28" cy="180" rx="14" ry="9" fill="${bellyC}"/>
-    <path d="M128 148 Q144 156 144 170 Q144 182 128 184 Q110 184 108 170 Q108 158 128 148Z" fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
-    <ellipse cx="132" cy="180" rx="14" ry="9" fill="${bellyC}"/>`;
-  const legs=`
-    <ellipse cx="56"  cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
-    <ellipse cx="56"  cy="191" rx="16" ry="8"  fill="${bellyC}"/>
-    <ellipse cx="104" cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
-    <ellipse cx="104" cy="191" rx="16" ry="8"  fill="${bellyC}"/>`;
-
-  let ears='', head='', nose='', faceOver='', whiskers='';
+  let ears='', head='', nose='', faceOver='', whiskers='', tail='';
 
   if(type==='dog'){
-    // 🐶 강아지 — 늘어진 귀, 큰 젖은 코
+    // 🐶 강아지
+    tail=`<g class="tw">
+      <path d="M120 162 Q144 150 147 166 Q149 181 134 186" fill="${mainC}" stroke="${OL}" stroke-width="13" stroke-linecap="round"/>
+      <path d="M121 164 Q143 153 146 167 Q148 179 135 184" fill="none" stroke="${hl(mainC,.32)}" stroke-width="5" stroke-linecap="round" opacity=".65"/>
+    </g>`;
     ears=`
-      <ellipse cx="22" cy="68" rx="20" ry="35" fill="${mainC}" stroke="${OL}" stroke-width="2.5" transform="rotate(-10 22 68)"/>
-      <ellipse cx="22" cy="68" rx="13" ry="26" fill="${bellyC}" opacity=".65" transform="rotate(-10 22 68)"/>
-      <ellipse cx="138" cy="68" rx="20" ry="35" fill="${mainC}" stroke="${OL}" stroke-width="2.5" transform="rotate(10 138 68)"/>
-      <ellipse cx="138" cy="68" rx="13" ry="26" fill="${bellyC}" opacity=".65" transform="rotate(10 138 68)"/>`;
+      <ellipse cx="22"  cy="68" rx="21" ry="36" fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.5" transform="rotate(-10 22 68)"/>
+      <ellipse cx="22"  cy="68" rx="13" ry="27" fill="${PINK}" opacity=".5" transform="rotate(-10 22 68)"/>
+      <ellipse cx="22"  cy="60" rx="7"  ry="14" fill="${hl(PINK,.25)}" opacity=".4" transform="rotate(-10 22 68)"/>
+      <ellipse cx="138" cy="68" rx="21" ry="36" fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.5" transform="rotate(10 138 68)"/>
+      <ellipse cx="138" cy="68" rx="13" ry="27" fill="${PINK}" opacity=".5" transform="rotate(10 138 68)"/>
+      <ellipse cx="138" cy="60" rx="7"  ry="14" fill="${hl(PINK,.25)}" opacity=".4" transform="rotate(10 138 68)"/>`;
     head=`
-      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
-      <ellipse cx="80" cy="106" rx="36" ry="28" fill="${bellyC}"/>`;
+      <circle cx="80" cy="88" r="62" fill="url(#hG${uid})" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="66" cy="59" rx="21" ry="13" fill="white" opacity=".1"/>
+      <ellipse cx="80" cy="106" rx="36" ry="28" fill="url(#vG${uid})"/>`;
     nose=`
-      <ellipse cx="80" cy="112" rx="11" ry="9" fill="${OL}"/>
-      <ellipse cx="80" cy="110" rx="6"  ry="3.8" fill="rgba(255,255,255,.18)"/>`;
+      <ellipse cx="80" cy="112" rx="12" ry="10" fill="${OL}"/>
+      <ellipse cx="80" cy="110" rx="7"  ry="4"  fill="rgba(255,255,255,.2)"/>
+      <ellipse cx="77" cy="109" rx="3.2" ry="2.4" fill="rgba(255,255,255,.32)"/>`;
     faceOver=`
-      <circle cx="54" cy="65" r="4.5" fill="${mainC}" opacity=".75" stroke="${OL}" stroke-width="1.2"/>
-      <circle cx="106" cy="65" r="4.5" fill="${mainC}" opacity=".75" stroke="${OL}" stroke-width="1.2"/>`;
+      <circle cx="54"  cy="65" r="4.5" fill="${hl(mainC,.1)}" stroke="${OL}" stroke-width="1.2"/>
+      <circle cx="106" cy="65" r="4.5" fill="${hl(mainC,.1)}" stroke="${OL}" stroke-width="1.2"/>`;
 
   } else if(type==='hamster'){
-    // 🐹 햄스터 — 작은 둥근 귀, 통통한 볼 주머니
+    // 🐹 햄스터
+    tail=`<g class="tw">
+      <path d="M116 170 Q136 165 138 178 Q139 187 126 185" fill="${mainC}" stroke="${OL}" stroke-width="9" stroke-linecap="round"/>
+    </g>`;
     ears=`
-      <circle cx="52" cy="38" r="20" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
-      <circle cx="52" cy="38" r="12" fill="${PINK}"/>
-      <circle cx="108" cy="38" r="20" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
-      <circle cx="108" cy="38" r="12" fill="${PINK}"/>`;
-    // 볼 주머니 (귀 뒤에 위치)
+      <circle cx="52"  cy="38" r="21" fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.5"/>
+      <circle cx="52"  cy="38" r="13" fill="${PINK}"/>
+      <ellipse cx="50" cy="32" rx="7.5" ry="5.5" fill="${hl(PINK,.28)}" opacity=".65"/>
+      <circle cx="108" cy="38" r="21" fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.5"/>
+      <circle cx="108" cy="38" r="13" fill="${PINK}"/>
+      <ellipse cx="106" cy="32" rx="7.5" ry="5.5" fill="${hl(PINK,.28)}" opacity=".65"/>`;
     faceOver=`
-      <ellipse cx="16" cy="106" rx="26" ry="22" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
-      <ellipse cx="16" cy="108" rx="18" ry="15" fill="${bellyC}"/>
-      <ellipse cx="144" cy="106" rx="26" ry="22" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
-      <ellipse cx="144" cy="108" rx="18" ry="15" fill="${bellyC}"/>`;
+      <ellipse cx="14"  cy="106" rx="27" ry="23" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.2"/>
+      <ellipse cx="14"  cy="108" rx="19" ry="16" fill="url(#vG${uid})"/>
+      <ellipse cx="146" cy="106" rx="27" ry="23" fill="url(#bG${uid})" stroke="${OL}" stroke-width="2.2"/>
+      <ellipse cx="146" cy="108" rx="19" ry="16" fill="url(#vG${uid})"/>`;
     head=`
-      <ellipse cx="80" cy="90" rx="66" ry="60" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
-      <ellipse cx="80" cy="106" rx="30" ry="24" fill="${bellyC}"/>`;
+      <ellipse cx="80" cy="90" rx="66" ry="60" fill="url(#hG${uid})" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="65" cy="61" rx="20" ry="12" fill="white" opacity=".1"/>
+      <ellipse cx="80" cy="106" rx="30" ry="24" fill="url(#vG${uid})"/>`;
     nose=`
-      <ellipse cx="80" cy="110" rx="5.5" ry="4.5" fill="#e06070" stroke="${OL}" stroke-width="1.2"/>
-      <ellipse cx="80" cy="109" rx="2.8" ry="2"   fill="rgba(255,255,255,.3)"/>`;
+      <ellipse cx="80" cy="110" rx="6"  ry="5"   fill="#e06070" stroke="${OL}" stroke-width="1.3"/>
+      <ellipse cx="79" cy="109" rx="3"  ry="2"   fill="rgba(255,255,255,.38)"/>`;
 
   } else if(type==='horse'){
-    // 🐴 말 — 긴 귀, 갈기, 큰 콧구멍
+    // 🐴 말
+    tail=`<g class="tw">
+      <path d="M126 158 Q150 146 154 164 Q158 181 138 188 Q130 192 122 186" fill="${mainC}" stroke="${OL}" stroke-width="11" stroke-linecap="round"/>
+      <path d="M128 162 Q148 151 152 166 Q155 179 139 185" fill="none" stroke="${hl(mainC,.32)}" stroke-width="4.5" stroke-linecap="round" opacity=".58"/>
+    </g>`;
     ears=`
-      <path d="M48 54 L52 6 L74 46Z" fill="${mainC}" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
-      <path d="M52 52 L56 12 L72 46Z" fill="${PINK}"/>
-      <path d="M112 54 L108 6 L86 46Z" fill="${mainC}" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
-      <path d="M108 52 L104 12 L88 46Z" fill="${PINK}"/>`;
-    // 갈기
+      <path d="M48 54 L52 6 L74 46Z"   fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M53 51 L57 13 L71 46Z"  fill="${PINK}"/>
+      <path d="M57 50 L60 20 L70 46Z"  fill="${hl(PINK,.22)}" opacity=".5"/>
+      <path d="M112 54 L108 6 L86 46Z" fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M107 51 L103 13 L89 46Z" fill="${PINK}"/>
+      <path d="M103 50 L100 20 L90 46Z" fill="${hl(PINK,.22)}" opacity=".5"/>`;
     faceOver=`
-      <path d="M48 38 Q58 8 80 4 Q102 8 112 38 Q100 16 80 12 Q60 16 48 38Z" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
-      <path d="M54 36 Q62 14 80 10 Q98 14 106 36 Q96 20 80 16 Q64 20 54 36Z" fill="${bellyC}" opacity=".4"/>`;
+      <path d="M48 38 Q58 8 80 4 Q102 8 112 38 Q100 16 80 12 Q60 16 48 38Z" fill="url(#hG${uid})" stroke="${OL}" stroke-width="1.8"/>
+      <path d="M56 36 Q64 14 80 10 Q96 14 104 36 Q96 22 80 18 Q64 22 56 36Z" fill="${hl(mainC,.3)}" opacity=".28"/>`;
     head=`
-      <circle cx="80" cy="84" r="60" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
-      <ellipse cx="80" cy="106" rx="34" ry="28" fill="${bellyC}"/>`;
-    // 콧구멍 2개
+      <circle cx="80" cy="84" r="60" fill="url(#hG${uid})" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="65" cy="57" rx="19" ry="12" fill="white" opacity=".1"/>
+      <ellipse cx="80" cy="106" rx="34" ry="28" fill="url(#vG${uid})"/>`;
     nose=`
-      <ellipse cx="72" cy="116" rx="9" ry="7.5" fill="${OL}" opacity=".55"/>
-      <ellipse cx="88" cy="116" rx="9" ry="7.5" fill="${OL}" opacity=".55"/>
-      <ellipse cx="72" cy="115" rx="5" ry="4"   fill="rgba(255,255,255,.2)"/>
-      <ellipse cx="88" cy="115" rx="5" ry="4"   fill="rgba(255,255,255,.2)"/>`;
+      <ellipse cx="72" cy="116" rx="10" ry="8.5" fill="${dk(mainC,.1)}" stroke="${OL}" stroke-width="1.5" opacity=".62"/>
+      <ellipse cx="88" cy="116" rx="10" ry="8.5" fill="${dk(mainC,.1)}" stroke="${OL}" stroke-width="1.5" opacity=".62"/>
+      <ellipse cx="71" cy="115" rx="5.5" ry="4"  fill="rgba(255,255,255,.22)"/>
+      <ellipse cx="87" cy="115" rx="5.5" ry="4"  fill="rgba(255,255,255,.22)"/>`;
 
   } else if(type==='fox'){
-    // 🦊 여우 — 아주 큰 뾰족 귀, 눈 주변 마스크, 뺨 흰 패치
+    // 🦊 여우
+    tail=`<g class="tw">
+      <path d="M125 154 Q152 138 157 159 Q162 180 146 188 Q136 195 124 186" fill="${mainC}" stroke="${OL}" stroke-width="2"/>
+      <path d="M128 158 Q150 144 155 163 Q159 179 146 186" fill="none" stroke="${hl(mainC,.38)}" stroke-width="6" stroke-linecap="round" opacity=".58"/>
+      <ellipse cx="142" cy="188" rx="13" ry="10" fill="${hl(bellyC,.15)}" stroke="${OL}" stroke-width="1.6"/>
+    </g>`;
     ears=`
-      <path d="M14 68 L32 4 L74 50Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
-      <path d="M22 66 L36 10 L70 50Z" fill="${PINK}"/>
-      <path d="M146 68 L128 4 L86 50Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
-      <path d="M138 66 L124 10 L90 50Z" fill="${PINK}"/>`;
+      <path d="M14 68 L32 4 L74 50Z"    fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M22 66 L37 11 L70 50Z"   fill="${PINK}"/>
+      <path d="M30 64 L42 18 L68 50Z"   fill="${hl(PINK,.18)}" opacity=".5"/>
+      <path d="M146 68 L128 4 L86 50Z"  fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M138 66 L123 11 L90 50Z" fill="${PINK}"/>
+      <path d="M130 64 L118 18 L92 50Z" fill="${hl(PINK,.18)}" opacity=".5"/>`;
     head=`
-      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
-      <ellipse cx="80" cy="104" rx="34" ry="28" fill="${bellyC}"/>`;
+      <circle cx="80" cy="88" r="62" fill="url(#hG${uid})" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="66" cy="60" rx="20" ry="12" fill="white" opacity=".1"/>
+      <ellipse cx="80" cy="104" rx="34" ry="28" fill="url(#vG${uid})"/>`;
     faceOver=`
-      <ellipse cx="56" cy="80" rx="22" ry="18" fill="${OL}" opacity=".16"/>
-      <ellipse cx="104" cy="80" rx="22" ry="18" fill="${OL}" opacity=".16"/>
-      <ellipse cx="44" cy="108" rx="18" ry="24" fill="${bellyC}" opacity=".88"/>
-      <ellipse cx="116" cy="108" rx="18" ry="24" fill="${bellyC}" opacity=".88"/>`;
+      <ellipse cx="56"  cy="80"  rx="23" ry="19" fill="${OL}" opacity=".12"/>
+      <ellipse cx="104" cy="80"  rx="23" ry="19" fill="${OL}" opacity=".12"/>
+      <ellipse cx="43"  cy="109" rx="20" ry="26" fill="url(#vG${uid})" opacity=".9"/>
+      <ellipse cx="117" cy="109" rx="20" ry="26" fill="url(#vG${uid})" opacity=".9"/>`;
     nose=`
-      <ellipse cx="80" cy="108" rx="7.5" ry="6" fill="${OL}"/>
-      <ellipse cx="80" cy="107" rx="4"   ry="2.5" fill="rgba(255,255,255,.15)"/>`;
+      <ellipse cx="80" cy="108" rx="8"  ry="6.5" fill="${OL}"/>
+      <ellipse cx="79" cy="107" rx="4"  ry="2.5" fill="rgba(255,255,255,.18)"/>`;
     whiskers=sid<=6
-      ?`<line x1="8"  y1="108" x2="52" y2="114" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
-        <line x1="8"  y1="118" x2="50" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>
-        <line x1="108" y1="114" x2="152" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
-        <line x1="110" y1="118" x2="152" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>`
-      :`<line x1="8"  y1="110" x2="50" y2="115" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>
-        <line x1="110" y1="115" x2="152" y2="110" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>`;
+      ?`<line x1="5"   y1="106" x2="52"  y2="112" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".58"/>
+        <line x1="5"   y1="116" x2="50"  y2="118" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".46"/>
+        <line x1="12"  y1="126" x2="52"  y2="124" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".3"/>
+        <line x1="108" y1="112" x2="155" y2="106" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".58"/>
+        <line x1="110" y1="118" x2="155" y2="116" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".46"/>
+        <line x1="108" y1="124" x2="148" y2="126" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".3"/>`
+      :`<line x1="5"   y1="110" x2="50"  y2="115" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>
+        <line x1="110" y1="115" x2="155" y2="110" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>`;
 
   } else {
     // 🐱 고양이 (기본)
+    tail=`<g class="tw">
+      <path d="M124 162 Q150 148 153 166 Q155 181 138 186" fill="${mainC}" stroke="${OL}" stroke-width="10" stroke-linecap="round"/>
+      <path d="M126 165 Q148 153 151 168 Q152 179 139 184" fill="none" stroke="${hl(mainC,.32)}" stroke-width="4" stroke-linecap="round" opacity=".58"/>
+    </g>`;
     ears=`
-      <path d="M20 72 L40 10 L78 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
-      <path d="M28 70 L45 18 L73 54Z" fill="${PINK}"/>
-      <path d="M140 72 L120 10 L82 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
-      <path d="M132 70 L115 18 L87 54Z" fill="${PINK}"/>`;
+      <path d="M20 72 L40 10 L78 54Z"   fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M28 70 L46 18 L73 54Z"   fill="${PINK}"/>
+      <path d="M35 68 L51 24 L70 54Z"   fill="${hl(PINK,.2)}" opacity=".5"/>
+      <path d="M140 72 L120 10 L82 54Z" fill="url(#earG${uid})" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M132 70 L114 18 L87 54Z" fill="${PINK}"/>
+      <path d="M125 68 L109 24 L90 54Z" fill="${hl(PINK,.2)}" opacity=".5"/>`;
     head=`
-      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
-      <ellipse cx="80" cy="104" rx="36" ry="30" fill="${bellyC}"/>`;
+      <circle cx="80" cy="88" r="62" fill="url(#hG${uid})" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="66" cy="60" rx="21" ry="13" fill="white" opacity=".1"/>
+      <ellipse cx="80" cy="104" rx="36" ry="30" fill="url(#vG${uid})"/>`;
     nose=`
-      <ellipse cx="80" cy="108" rx="7.5" ry="5.8" fill="#e88a9a" stroke="${OL}" stroke-width="1.3"/>
-      <ellipse cx="80" cy="107" rx="3.8" ry="2.2" fill="rgba(255,255,255,.3)"/>`;
+      <ellipse cx="80" cy="108" rx="8"   ry="6"   fill="${NOSE}" stroke="${OL}" stroke-width="1.4"/>
+      <ellipse cx="79" cy="107" rx="3.8" ry="2.2" fill="rgba(255,255,255,.38)"/>`;
     whiskers=sid<=6
-      ?`<line x1="10"  y1="108" x2="55" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
-        <line x1="10"  y1="118" x2="53" y2="119" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
-        <line x1="105" y1="115" x2="150" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
-        <line x1="107" y1="119" x2="150" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`
-      :`<line x1="10"  y1="110" x2="53" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>
-        <line x1="107" y1="115" x2="150" y2="110" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>`;
+      ?`<line x1="6"   y1="107" x2="54"  y2="113" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>
+        <line x1="6"   y1="117" x2="52"  y2="119" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".48"/>
+        <line x1="12"  y1="127" x2="52"  y2="125" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".32"/>
+        <line x1="106" y1="113" x2="154" y2="107" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".6"/>
+        <line x1="108" y1="119" x2="154" y2="117" stroke="${OL}" stroke-width="1.8" stroke-linecap="round" opacity=".48"/>
+        <line x1="108" y1="125" x2="148" y2="127" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".32"/>`
+      :`<line x1="6"   y1="110" x2="52"  y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>
+        <line x1="108" y1="115" x2="154" y2="110" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>`;
   }
 
   return `<svg viewBox="0 0 160 200" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs><style>${css}</style></defs>
+  ${defs}
   ${bgFX}
-  <g class="hb">
+  ${gndShadow}
+  <g class="hb" filter="url(#dsh${uid})">
+    ${tail}
     ${body}${arms}${legs}
-    ${faceOver && type==='hamster' ? faceOver : ''}
+    ${type==='hamster'?faceOver:''}
     ${ears}
     ${head}
-    ${faceOver && type!=='hamster' ? faceOver : ''}
+    ${type!=='hamster'?faceOver:''}
     ${browEl}
     ${eyesEl}
     ${nose}
@@ -2314,191 +2427,4 @@ function renderWeeklyBudget(){
                      `linear-gradient(90deg,#f97316,#ef4444)`;
   const bar = document.getElementById('wbBarFill');
   bar.style.width = usedPct + '%';
-  bar.style.background = barColor;
-
-  // 초과 경고
-  document.getElementById('wbWarn').style.display = remain < 0 ? 'block' : 'none';
-}
-
-function setRecCycle(c){
-  recCycle = c;
-  document.getElementById('recCycleMonth').className = c==='monthly'?'active':'';
-  document.getElementById('recCycleYear').className  = c==='yearly' ?'active':'';
-  populateRecDaySelect();
-}
-
-function populateRecDaySelect(){
-  const sel = document.getElementById('recDay');
-  sel.innerHTML = '';
-  if(recCycle === 'monthly'){
-    for(let d=1;d<=31;d++){
-      const o=document.createElement('option'); o.value=d; o.textContent=`매월 ${d}일`; sel.appendChild(o);
-    }
-  } else {
-    const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-    months.forEach((m,i)=>{
-      const o=document.createElement('option'); o.value=i+1; o.textContent=`매년 ${m}`; sel.appendChild(o);
-    });
-  }
-}
-
-const REC_ICONS = {
-  '넷플릭스':'🎬','유튜브':'▶️','스포티파이':'🎵','멜론':'🎵','왓챠':'🎞️','디즈니':'🏰',
-  '애플':'🍎','아마존':'📦','쿠팡':'🛒','카카오':'💛','네이버':'🟢','구글':'🔍',
-  '마이크로소프트':'🪟','어도비':'🎨','드롭박스':'📁','슬랙':'💬','줌':'📹',
-  '통신':'📱','인터넷':'🌐','보험':'🛡️','월세':'🏠','관리비':'🏢','헬스장':'💪',
-};
-function getRecIcon(name){
-  for(const [k,v] of Object.entries(REC_ICONS)){
-    if(name.includes(k)) return v;
-  }
-  return '🔄';
-}
-
-function addRecurring(){
-  const name   = document.getElementById('recItemName').value.trim();
-  const amount = parseFloat(document.getElementById('recAmount').value);
-  const day    = parseInt(document.getElementById('recDay').value);
-  if(!name){toast('서비스명을 입력하세요.','error');return;}
-  if(!amount||amount<=0){toast('올바른 금액을 입력하세요.','error');return;}
-  recurringData.push({id:Date.now(), name, amount, cycle:recCycle, day});
-  saveRec(); renderRecurring();
-  document.getElementById('recItemName').value='';
-  document.getElementById('recAmount').value='';
-  toast(`${name} 정기 결제 추가! ${fmt(amount)}`,'success');
-}
-
-function deleteRecurring(id){
-  recurringData = recurringData.filter(r=>r.id!==id);
-  saveRec(); renderRecurring();
-  toast('정기 결제 삭제','info');
-}
-
-function payNow(id){
-  const rec = recurringData.find(r=>r.id===id);
-  if(!rec) return;
-  const today = new Date().toISOString().split('T')[0];
-  data.records.unshift({id:Date.now(), date:today, desc:rec.name+' (정기결제)', amount:rec.amount, type:'expense', category:'주거/통신'});
-  save(); render();
-  toast(`${rec.name} ${fmt(rec.amount)} 지출 기록! 💳`,'error');
-}
-
-function getDaysUntilNext(rec){
-  const now = new Date();
-  const today = now.getDate();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
-  if(rec.cycle==='monthly'){
-    let nextDate = new Date(thisYear, thisMonth, rec.day);
-    if(nextDate <= now) nextDate = new Date(thisYear, thisMonth+1, rec.day);
-    return Math.ceil((nextDate - now) / 86400000);
-  } else {
-    let nextDate = new Date(thisYear, rec.day-1, 1);
-    if(nextDate <= now) nextDate = new Date(thisYear+1, rec.day-1, 1);
-    return Math.ceil((nextDate - now) / 86400000);
-  }
-}
-
-function toMonthlyAmount(rec){
-  return rec.cycle==='monthly' ? rec.amount : rec.amount/12;
-}
-
-function renderRecurring(){
-  const now = new Date();
-  const thisMonth = now.getMonth(), thisYear = now.getFullYear();
-
-  // Totals
-  const monthlyTotal = recurringData.reduce((s,r)=>s+toMonthlyAmount(r),0);
-  const yearlyTotal  = recurringData.reduce((s,r)=>s+(r.cycle==='yearly'?r.amount:r.amount*12),0);
-  const remaining    = recurringData.filter(r=>{
-    if(r.cycle!=='monthly') return false;
-    const paid = data.records.some(rec=>
-      rec.type==='expense' && rec.desc.includes(r.name) &&
-      new Date(rec.date).getMonth()===thisMonth && new Date(rec.date).getFullYear()===thisYear
-    );
-    return !paid && r.day >= now.getDate();
-  }).length;
-
-  document.getElementById('recCount').textContent = recurringData.length;
-  document.getElementById('recMonthlyTotal').textContent = fmt(monthlyTotal);
-  document.getElementById('recYearlyTotal').textContent  = fmt(yearlyTotal);
-  document.getElementById('recRemainingCount').textContent = `${remaining}건`;
-
-  const list = document.getElementById('recList');
-  if(!recurringData.length){
-    list.innerHTML=`<div class="empty-state"><div class="icon">🔄</div><div>정기 결제 항목이 없습니다.</div></div>`;
-    return;
-  }
-
-  const sorted = [...recurringData].sort((a,b)=>getDaysUntilNext(a)-getDaysUntilNext(b));
-  list.innerHTML = sorted.map(r=>{
-    const days = getDaysUntilNext(r);
-    const soon = days <= 7;
-    const nextLabel = days===0?'오늘 결제!':days===1?'내일 결제!':days<=7?`${days}일 후`:days<=30?`${days}일 후`:`${days}일 후`;
-    const cycleLabel = r.cycle==='monthly'?`매월 ${r.day}일`:`매년 ${r.day}월`;
-    const cycleBadge = r.cycle==='monthly'?'monthly':'yearly';
-    return `<div class="rec-item">
-      <div class="rec-icon">${getRecIcon(r.name)}</div>
-      <div class="rec-info">
-        <div class="rec-name">${escHtml(r.name)}</div>
-        <div class="rec-meta">
-          <span class="rec-cycle-badge ${cycleBadge}">${r.cycle==='monthly'?'월간':'연간'}</span>
-          <span class="rec-day-badge">${cycleLabel}</span>
-          <span class="rec-next-badge ${soon?'soon':'ok'}">${nextLabel}</span>
-        </div>
-      </div>
-      <div class="rec-amount">${fmt(r.amount)}</div>
-      <div class="rec-actions">
-        <button class="rec-pay-btn" onclick="payNow(${r.id})">지출 기록</button>
-        <button class="rec-del-btn" onclick="deleteRecurring(${r.id})">✕</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function toast(msg,type='info'){
-  const wrap=document.getElementById('toastWrap');
-  const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; wrap.appendChild(el);
-  setTimeout(()=>{el.classList.add('hide');setTimeout(()=>el.remove(),300);},2500);
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════════════════════════
-function initApp(){
-  emojiCache={};
-  // 동물 선택 버튼 활성화
-  document.querySelectorAll('.animal-btn').forEach(b=>{
-    const t=b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
-    b.classList.toggle('active', t===animalType);
-  });
-  document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
-  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
-  document.getElementById('titleText').textContent=appTitle;
-  document.getElementById('iconTrigger').textContent=selectedIcon;
-  document.title=appTitle;
-  if(photoDataURL){
-    document.getElementById('photoThumbImg').src=photoDataURL;
-    document.getElementById('photoThumb').style.display='block';
-    document.getElementById('uploadPill').style.display='none';
-  } else {
-    document.getElementById('photoThumb').style.display='none';
-    document.getElementById('uploadPill').style.display='flex';
-  }
-  if(personColors) rebuildCache();
-  render(true);
-  populateRecDaySelect();
-  renderRecurring();
-  updateCategorySelect('income');
-  renderWeeklyBudget();
-  // 창 크기 바뀔 때 러너 위치 재계산
-  window.addEventListener('resize', ()=>{
-    const pct = data.goal>0
-      ? Math.min(100,(data.currentBase + data.records.reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100)
-      : 0;
-    updateProgressRunner(pct);
-  });
-}
-
-// ── 시작 시 Firebase 초기화 + 자동 로그인
+  
