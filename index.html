@@ -893,11 +893,14 @@ function setSyncDot(state){
 }
 
 function showFbLoading(msg){
-  document.getElementById('fbLoadingText').textContent = msg || '연결 중...';
-  document.getElementById('fbLoading').style.display  = 'flex';
+  const el = document.getElementById('fbLoading');
+  const tx = document.getElementById('fbLoadingText');
+  if(tx) tx.textContent = msg || '연결 중...';
+  if(el) el.style.display = 'flex';
 }
 function hideFbLoading(){
-  document.getElementById('fbLoading').style.display = 'none';
+  const el = document.getElementById('fbLoading');
+  if(el) el.style.display = 'none';
 }
 
 // ── Firestore: 사용자 목록 ──
@@ -1036,47 +1039,59 @@ function showView(id){
 
 // ══ 1단계: 이름+비밀번호 로그인 ══
 async function doStage1(){
-  const name=document.getElementById('s1Name').value.trim();
-  const pass=document.getElementById('s1Pass').value;
-  if(!name){ document.getElementById('stage1Error').textContent='이름을 입력하세요.'; return; }
-  if(!pass){ document.getElementById('stage1Error').textContent='비밀번호를 입력하세요.'; return; }
-  const npHash=hashStr(name+':'+pass);
-  let users=getUsers();
-  let code=Object.keys(users).find(c=>users[c].npHash===npHash);
+  const errEl = document.getElementById('stage1Error');
+  try {
+    const name=document.getElementById('s1Name').value.trim();
+    const pass=document.getElementById('s1Pass').value;
+    if(!name){ errEl.textContent='이름을 입력하세요.'; return; }
+    if(!pass){ errEl.textContent='비밀번호를 입력하세요.'; return; }
+    const npHash=hashStr(name+':'+pass);
+    let users=getUsers();
+    let code=Object.keys(users).find(c=>users[c].npHash===npHash);
 
-  // 로컬에 없으면 Firebase에서 최신 사용자 목록 재조회 (다른 기기에서 가입한 경우)
-  if(!code && fbReady){
-    document.getElementById('stage1Error').textContent='';
-    showFbLoading('계정 확인 중...');
-    const fbUsers=await fbGetUsers();
-    hideFbLoading();
-    if(fbUsers && Object.keys(fbUsers).length>0){
-      const merged=Object.assign({},users,fbUsers);
-      saveUsers(merged);
-      users=merged;
-      code=Object.keys(users).find(c=>users[c].npHash===npHash);
+    // 로컬에 없으면 Firebase에서 최신 사용자 목록 재조회 (다른 기기에서 가입한 경우)
+    if(!code && fbReady){
+      errEl.textContent='';
+      showFbLoading('계정 확인 중...');
+      try {
+        const fbUsers=await fbGetUsers();
+        hideFbLoading();
+        if(fbUsers && Object.keys(fbUsers).length>0){
+          const merged=Object.assign({},users,fbUsers);
+          saveUsers(merged);
+          users=merged;
+          code=Object.keys(users).find(c=>users[c].npHash===npHash);
+        }
+      } catch(fbErr){
+        hideFbLoading();
+        console.warn('[Stage1] Firebase 조회 오류:', fbErr);
+      }
     }
-  }
 
-  if(!code){
-    const msg = fbReady
-      ? '등록되지 않은 이름 또는 비밀번호입니다.'
-      : '계정을 찾을 수 없습니다.\n(Firebase 연결 실패 — 인터넷 연결 및 Firestore 규칙 확인)';
-    document.getElementById('stage1Error').textContent = msg;
-    return;
+    if(!code){
+      const msg = fbReady
+        ? '등록되지 않은 이름 또는 비밀번호입니다.'
+        : '계정을 찾을 수 없습니다.\n(Firebase 연결 실패 — 인터넷 연결 및 Firestore 규칙 확인)';
+      errEl.textContent = msg;
+      return;
+    }
+    // 자동 로그인 처리
+    pendingCode=code;
+    if(document.getElementById('autoLogin').checked){
+      localStorage.setItem('__autoLogin__',JSON.stringify({code, npHash}));
+    } else {
+      localStorage.removeItem('__autoLogin__');
+    }
+    // 2단계로 이동
+    const uEntry=users[code];
+    document.getElementById('loginSubText').textContent=
+      (uEntry.name?uEntry.name+'님, ':'')+'4자리 인증번호를 입력하세요';
+    showView('viewLogin');
+  } catch(e){
+    hideFbLoading();
+    console.error('[Stage1] 오류:', e);
+    errEl.textContent = '오류가 발생했습니다: ' + (e.message||String(e));
   }
-  // 자동 로그인 처리
-  pendingCode=code;
-  if(document.getElementById('autoLogin').checked){
-    localStorage.setItem('__autoLogin__',JSON.stringify({code, npHash}));
-  } else {
-    localStorage.removeItem('__autoLogin__');
-  }
-  // 2단계로 이동
-  const uEntry=users[code];
-  document.getElementById('loginSubText').textContent=
-    (uEntry.name?uEntry.name+'님, ':'')+'4자리 인증번호를 입력하세요';
-  showView('viewLogin');
 }
 function goBackToStage1(){
   pendingCode='';
@@ -1103,24 +1118,36 @@ async function doLogin(){
     setTimeout(pinClear,500); return;
   }
   currentUser=pinBuffer;
-  // Firestore에서 최신 데이터 불러오기
-  if(fbReady){
-    showFbLoading('데이터를 불러오는 중...');
-    const fbData = await fbLoadUserData(currentUser);
-    hideFbLoading();
-    if(fbData && fbData.savingsData){
-      localStorage.setItem(uk('savingsData'),   JSON.stringify(fbData.savingsData));
-      if(fbData.recurringData) localStorage.setItem(uk('recurringData'), JSON.stringify(fbData.recurringData));
-      if(fbData.appTitle)      localStorage.setItem(uk('appTitle'),      fbData.appTitle);
-      if(fbData.titleIcon)     localStorage.setItem(uk('titleIcon'),     fbData.titleIcon);
-      if(fbData.personColors)  localStorage.setItem(uk('personColors'),  JSON.stringify(fbData.personColors));
-      if(fbData.prevPct!=null) localStorage.setItem(uk('prevPct'),       String(fbData.prevPct));
-      if(fbData.animalType)    localStorage.setItem(uk('animalType'),    fbData.animalType);
-      if(fbData.weeklyBudget)  localStorage.setItem(uk('weeklyBudget'),  String(fbData.weeklyBudget));
+  try {
+    // Firestore에서 최신 데이터 불러오기
+    if(fbReady){
+      showFbLoading('데이터를 불러오는 중...');
+      try {
+        const fbData = await fbLoadUserData(currentUser);
+        hideFbLoading();
+        if(fbData && fbData.savingsData){
+          localStorage.setItem(uk('savingsData'),   JSON.stringify(fbData.savingsData));
+          if(fbData.recurringData) localStorage.setItem(uk('recurringData'), JSON.stringify(fbData.recurringData));
+          if(fbData.appTitle)      localStorage.setItem(uk('appTitle'),      fbData.appTitle);
+          if(fbData.titleIcon)     localStorage.setItem(uk('titleIcon'),     fbData.titleIcon);
+          if(fbData.personColors)  localStorage.setItem(uk('personColors'),  JSON.stringify(fbData.personColors));
+          if(fbData.prevPct!=null) localStorage.setItem(uk('prevPct'),       String(fbData.prevPct));
+          if(fbData.animalType)    localStorage.setItem(uk('animalType'),    fbData.animalType);
+          if(fbData.weeklyBudget)  localStorage.setItem(uk('weeklyBudget'),  String(fbData.weeklyBudget));
+        }
+      } catch(fbErr){
+        hideFbLoading();
+        console.warn('[Login] Firebase 데이터 로드 오류 (로컬 데이터로 계속):', fbErr);
+      }
     }
+    hideLoginOverlay(); loadUserData(); initApp();
+    toast('로그인 성공! 👋','info');
+  } catch(e){
+    hideFbLoading();
+    console.error('[Login] 오류:', e);
+    document.getElementById('loginError').textContent = '로그인 오류: ' + (e.message||String(e));
+    setTimeout(pinClear, 1000);
   }
-  hideLoginOverlay(); loadUserData(); initApp();
-  toast('로그인 성공! 👋','info');
 }
 
 // ══ 회원가입 ══
@@ -2261,26 +2288,4 @@ function setRecCycle(c){
   recCycle = c;
   document.getElementById('recCycleMonth').className = c==='monthly'?'active':'';
   document.getElementById('recCycleYear').className  = c==='yearly' ?'active':'';
-  populateRecDaySelect();
-}
-
-function populateRecDaySelect(){
-  const sel = document.getElementById('recDay');
-  sel.innerHTML = '';
-  if(recCycle === 'monthly'){
-    for(let d=1;d<=31;d++){
-      const o=document.createElement('option'); o.value=d; o.textContent=`매월 ${d}일`; sel.appendChild(o);
-    }
-  } else {
-    const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
-    months.forEach((m,i)=>{
-      const o=document.createElement('option'); o.value=i+1; o.textContent=`매년 ${m}`; sel.appendChild(o);
-    });
-  }
-}
-
-const REC_ICONS = {
-  '넷플릭스':'🎬','유튜브':'▶️','스포티파이':'🎵','멜론':'🎵','왓챠':'🎞️','디즈니':'🏰',
-  '애플':'🍎','아마존':'📦','쿠팡':'🛒','카카오':'💛','네이버':'🟢','구글':'🔍',
-  '마이크로소프트':'🪟','어도비':'🎨','드롭박스':'📁','슬랙':'💬','줌':'📹',
-  '통신':'📱','인터넷':'🌐','
+  populateRecD
