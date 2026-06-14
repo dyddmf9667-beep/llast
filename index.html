@@ -2288,4 +2288,239 @@ function setRecCycle(c){
   recCycle = c;
   document.getElementById('recCycleMonth').className = c==='monthly'?'active':'';
   document.getElementById('recCycleYear').className  = c==='yearly' ?'active':'';
-  populateRecD
+  populateRecDaySelect();
+}
+
+function populateRecDaySelect(){
+  const sel = document.getElementById('recDay');
+  sel.innerHTML = '';
+  if(recCycle === 'monthly'){
+    for(let d=1;d<=31;d++){
+      const o=document.createElement('option'); o.value=d; o.textContent=`매월 ${d}일`; sel.appendChild(o);
+    }
+  } else {
+    const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+    months.forEach((m,i)=>{
+      const o=document.createElement('option'); o.value=i+1; o.textContent=`매년 ${m}`; sel.appendChild(o);
+    });
+  }
+}
+
+const REC_ICONS = {
+  '넷플릭스':'🎬','유튜브':'▶️','스포티파이':'🎵','멜론':'🎵','왓챠':'🎞️','디즈니':'🏰',
+  '애플':'🍎','아마존':'📦','쿠팡':'🛒','카카오':'💛','네이버':'🟢','구글':'🔍',
+  '마이크로소프트':'🪟','어도비':'🎨','드롭박스':'📁','슬랙':'💬','줌':'📹',
+  '통신':'📱','인터넷':'🌐','보험':'🛡️','월세':'🏠','관리비':'🏢','헬스장':'💪',
+};
+function getRecIcon(name){
+  for(const [k,v] of Object.entries(REC_ICONS)){
+    if(name.includes(k)) return v;
+  }
+  return '🔄';
+}
+
+function addRecurring(){
+  const name   = document.getElementById('recItemName').value.trim();
+  const amount = parseFloat(document.getElementById('recAmount').value);
+  const day    = parseInt(document.getElementById('recDay').value);
+  if(!name){toast('서비스명을 입력하세요.','error');return;}
+  if(!amount||amount<=0){toast('올바른 금액을 입력하세요.','error');return;}
+  recurringData.push({id:Date.now(), name, amount, cycle:recCycle, day});
+  saveRec(); renderRecurring();
+  document.getElementById('recItemName').value='';
+  document.getElementById('recAmount').value='';
+  toast(`${name} 정기 결제 추가! ${fmt(amount)}`,'success');
+}
+
+function deleteRecurring(id){
+  recurringData = recurringData.filter(r=>r.id!==id);
+  saveRec(); renderRecurring();
+  toast('정기 결제 삭제','info');
+}
+
+function payNow(id){
+  const rec = recurringData.find(r=>r.id===id);
+  if(!rec) return;
+  const today = new Date().toISOString().split('T')[0];
+  data.records.unshift({id:Date.now(), date:today, desc:rec.name+' (정기결제)', amount:rec.amount, type:'expense', category:'주거/통신'});
+  save(); render();
+  toast(`${rec.name} ${fmt(rec.amount)} 지출 기록! 💳`,'error');
+}
+
+function getDaysUntilNext(rec){
+  const now = new Date();
+  const today = now.getDate();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  if(rec.cycle==='monthly'){
+    let nextDate = new Date(thisYear, thisMonth, rec.day);
+    if(nextDate <= now) nextDate = new Date(thisYear, thisMonth+1, rec.day);
+    return Math.ceil((nextDate - now) / 86400000);
+  } else {
+    let nextDate = new Date(thisYear, rec.day-1, 1);
+    if(nextDate <= now) nextDate = new Date(thisYear+1, rec.day-1, 1);
+    return Math.ceil((nextDate - now) / 86400000);
+  }
+}
+
+function toMonthlyAmount(rec){
+  return rec.cycle==='monthly' ? rec.amount : rec.amount/12;
+}
+
+function renderRecurring(){
+  const now = new Date();
+  const thisMonth = now.getMonth(), thisYear = now.getFullYear();
+
+  // Totals
+  const monthlyTotal = recurringData.reduce((s,r)=>s+toMonthlyAmount(r),0);
+  const yearlyTotal  = recurringData.reduce((s,r)=>s+(r.cycle==='yearly'?r.amount:r.amount*12),0);
+  const remaining    = recurringData.filter(r=>{
+    if(r.cycle!=='monthly') return false;
+    const paid = data.records.some(rec=>
+      rec.type==='expense' && rec.desc.includes(r.name) &&
+      new Date(rec.date).getMonth()===thisMonth && new Date(rec.date).getFullYear()===thisYear
+    );
+    return !paid && r.day >= now.getDate();
+  }).length;
+
+  document.getElementById('recCount').textContent = recurringData.length;
+  document.getElementById('recMonthlyTotal').textContent = fmt(monthlyTotal);
+  document.getElementById('recYearlyTotal').textContent  = fmt(yearlyTotal);
+  document.getElementById('recRemainingCount').textContent = `${remaining}건`;
+
+  const list = document.getElementById('recList');
+  if(!recurringData.length){
+    list.innerHTML=`<div class="empty-state"><div class="icon">🔄</div><div>정기 결제 항목이 없습니다.</div></div>`;
+    return;
+  }
+
+  const sorted = [...recurringData].sort((a,b)=>getDaysUntilNext(a)-getDaysUntilNext(b));
+  list.innerHTML = sorted.map(r=>{
+    const days = getDaysUntilNext(r);
+    const soon = days <= 7;
+    const nextLabel = days===0?'오늘 결제!':days===1?'내일 결제!':days<=7?`${days}일 후`:days<=30?`${days}일 후`:`${days}일 후`;
+    const cycleLabel = r.cycle==='monthly'?`매월 ${r.day}일`:`매년 ${r.day}월`;
+    const cycleBadge = r.cycle==='monthly'?'monthly':'yearly';
+    return `<div class="rec-item">
+      <div class="rec-icon">${getRecIcon(r.name)}</div>
+      <div class="rec-info">
+        <div class="rec-name">${escHtml(r.name)}</div>
+        <div class="rec-meta">
+          <span class="rec-cycle-badge ${cycleBadge}">${r.cycle==='monthly'?'월간':'연간'}</span>
+          <span class="rec-day-badge">${cycleLabel}</span>
+          <span class="rec-next-badge ${soon?'soon':'ok'}">${nextLabel}</span>
+        </div>
+      </div>
+      <div class="rec-amount">${fmt(r.amount)}</div>
+      <div class="rec-actions">
+        <button class="rec-pay-btn" onclick="payNow(${r.id})">지출 기록</button>
+        <button class="rec-del-btn" onclick="deleteRecurring(${r.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(msg,type='info'){
+  const wrap=document.getElementById('toastWrap');
+  const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; wrap.appendChild(el);
+  setTimeout(()=>{el.classList.add('hide');setTimeout(()=>el.remove(),300);},2500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+function initApp(){
+  emojiCache={};
+  // 동물 선택 버튼 활성화
+  document.querySelectorAll('.animal-btn').forEach(b=>{
+    const t=b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    b.classList.toggle('active', t===animalType);
+  });
+  document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  document.getElementById('titleText').textContent=appTitle;
+  document.getElementById('iconTrigger').textContent=selectedIcon;
+  document.title=appTitle;
+  if(photoDataURL){
+    document.getElementById('photoThumbImg').src=photoDataURL;
+    document.getElementById('photoThumb').style.display='block';
+    document.getElementById('uploadPill').style.display='none';
+  } else {
+    document.getElementById('photoThumb').style.display='none';
+    document.getElementById('uploadPill').style.display='flex';
+  }
+  if(personColors) rebuildCache();
+  render(true);
+  populateRecDaySelect();
+  renderRecurring();
+  updateCategorySelect('income');
+  renderWeeklyBudget();
+  // 창 크기 바뀔 때 러너 위치 재계산
+  window.addEventListener('resize', ()=>{
+    const pct = data.goal>0
+      ? Math.min(100,(data.currentBase + data.records.reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100)
+      : 0;
+    updateProgressRunner(pct);
+  });
+}
+
+// ── 시작 시 Firebase 초기화 + 자동 로그인 체크 ──
+(async function(){
+  try {
+    const todayEl = document.getElementById('todayDate');
+    if(todayEl) todayEl.textContent =
+      new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+
+    // Firebase 초기화 (연결 테스트 포함)
+    await fbInit();
+
+    // Firebase 연결 시 — 사용자 목록 동기화 (다른 기기에서 가입한 계정도 로그인 가능)
+    if(fbReady){
+      try {
+        showFbLoading('연결 중...');
+        const fbUsers = await fbGetUsers();
+        hideFbLoading();
+        if(fbUsers && Object.keys(fbUsers).length > 0){
+          const localUsers = getUsers();
+          const merged = Object.assign({}, localUsers, fbUsers);
+          saveUsers(merged);
+        }
+      } catch(syncErr){
+        hideFbLoading();
+        console.warn('[INIT] 사용자 목록 동기화 오류:', syncErr);
+      }
+    }
+
+    const autoData=JSON.parse(localStorage.getItem('__autoLogin__')||'null');
+    const users=getUsers();
+
+    if(autoData && users[autoData.code]){
+      // 자동 로그인 데이터 유효 → 1단계 건너뛰고 2단계로
+      pendingCode=autoData.code;
+      const uname=users[autoData.code].name||'';
+      const subEl = document.getElementById('loginSubText');
+      if(subEl) subEl.textContent=(uname?uname+'님, ':'')+'4자리 인증번호를 입력하세요';
+      showView('viewLogin');
+    } else {
+      // 자동 로그인 없음 → 1단계 로그인
+      showView('viewStage1');
+    }
+  } catch(fatalErr){
+    // 치명적 오류 발생 시 기본 로그인 화면으로 폴백
+    console.error('[INIT] 치명적 오류:', fatalErr);
+    hideFbLoading();
+    try { showView('viewStage1'); } catch(e){}
+  }
+})();
+</script>
+
+<!-- Firebase 로딩 오버레이 -->
+<div id="fbLoading" class="fb-loading" style="display:none">
+  <div class="fb-loading-card">
+    <div class="fb-spinner"></div>
+    <div class="fb-loading-text" id="fbLoadingText">연결 중...</div>
+  </div>
+</div>
+</body>
+</html>
