@@ -349,6 +349,27 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     .fb-loading-text{font-size:.88rem;font-weight:600;color:rgba(45,45,58,.55)}
 
+    /* ── 주간 예산 ── */
+    .wb-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+    .wb-title{font-size:1rem;font-weight:700}
+    .wb-days-badge{font-size:.75rem;font-weight:700;padding:3px 12px;border-radius:999px;background:rgba(255,255,255,.5);border:1.5px solid rgba(255,255,255,.7);color:rgba(45,45,58,.5)}
+    .wb-setup{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .wb-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+    .wb-stat{text-align:center;padding:12px 8px;border-radius:16px;background:rgba(255,255,255,.45);border:1.5px solid rgba(255,255,255,.65)}
+    .wb-stat-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:rgba(45,45,58,.42);margin-bottom:5px}
+    .wb-stat-value{font-size:1.05rem;font-weight:800;letter-spacing:-.4px}
+    .wb-stat-value.wb-budget{background:linear-gradient(90deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .wb-stat-value.wb-spent{color:#e11d48}
+    .wb-stat-value.wb-remain-ok{color:#059669}
+    .wb-stat-value.wb-remain-low{color:#f97316}
+    .wb-stat-value.wb-remain-over{color:#e11d48}
+    .wb-bar-wrap{margin-bottom:10px}
+    .wb-bar-label{display:flex;justify-content:space-between;font-size:.75rem;font-weight:600;color:rgba(45,45,58,.45);margin-bottom:6px}
+    .wb-bar-bg{width:100%;height:14px;border-radius:999px;background:rgba(200,190,230,.2);border:1px solid rgba(255,255,255,.5);overflow:hidden}
+    .wb-bar-fill{height:100%;border-radius:999px;transition:width .6s cubic-bezier(.4,0,.2,1),background .4s}
+    .wb-warn{font-size:.82rem;font-weight:700;color:#e11d48;text-align:center;padding:8px 14px;border-radius:12px;background:rgba(225,29,72,.08);margin-top:8px;display:none}
+    .wb-change{background:none;border:none;cursor:pointer;font-size:.75rem;font-weight:600;color:rgba(100,80,200,.5);font-family:inherit;text-decoration:underline;text-underline-offset:2px;padding:0;margin-top:8px;display:block;text-align:right;width:100%}
+    @media(max-width:600px){.wb-stats{gap:7px}.wb-stat-value{font-size:.9rem}}
     /* ══ 모바일 최적화 ══════════════════════════════════════════════ */
     @media(max-width:600px){
       /* 배경 블러 경량화 (성능) */
@@ -665,6 +686,54 @@
     </div>
   </div>
 
+  <!-- Weekly Budget -->
+  <div class="glass" id="weeklyBudgetCard">
+    <div class="wb-header">
+      <span class="wb-title">📅 이번 주 예산</span>
+      <span class="wb-days-badge" id="wbDaysBadge">로딩 중...</span>
+    </div>
+
+    <!-- 예산 미설정: 입력 폼 -->
+    <div id="wbSetupArea">
+      <div style="font-size:.85rem;color:rgba(45,45,58,.48);font-weight:600;margin-bottom:12px">이번 주 사용 가능한 금액을 설정하세요</div>
+      <div class="wb-setup">
+        <input class="pill-input" type="number" id="weeklyBudgetInput" placeholder="주간 예산 (원)" min="0" style="flex:1"
+               onkeydown="if(event.key==='Enter')setWeeklyBudget()"/>
+        <button class="btn btn-primary" style="white-space:nowrap;padding:10px 18px" onclick="setWeeklyBudget()">설정</button>
+      </div>
+    </div>
+
+    <!-- 예산 설정 후: 현황 -->
+    <div id="wbContentArea" style="display:none">
+      <div class="wb-stats">
+        <div class="wb-stat">
+          <div class="wb-stat-label">주간 예산</div>
+          <div class="wb-stat-value wb-budget" id="wbBudgetVal">₩0</div>
+        </div>
+        <div class="wb-stat">
+          <div class="wb-stat-label">사용한 금액</div>
+          <div class="wb-stat-value wb-spent" id="wbSpentVal">₩0</div>
+        </div>
+        <div class="wb-stat">
+          <div class="wb-stat-label">남은 금액</div>
+          <div class="wb-stat-value wb-remain-ok" id="wbRemainVal">₩0</div>
+        </div>
+      </div>
+      <div class="wb-bar-wrap">
+        <div class="wb-bar-label">
+          <span>0%</span>
+          <span id="wbUsedPct">0% 사용</span>
+          <span>예산</span>
+        </div>
+        <div class="wb-bar-bg">
+          <div class="wb-bar-fill" id="wbBarFill" style="width:0%"></div>
+        </div>
+      </div>
+      <div class="wb-warn" id="wbWarn">⚠️ 이번 주 예산을 초과했어요!</div>
+      <button class="wb-change" onclick="resetWeeklyBudget()">✏️ 예산 변경</button>
+    </div>
+  </div>
+
   <!-- Record Form -->
   <div class="glass">
     <div class="form-title">📝 내역 기록</div>
@@ -684,6 +753,26 @@
         <button class="btn btn-primary" onclick="addRecord()">기록 추가</button>
       </div>
     </div>
+  </div>
+
+  <!-- Log -->
+  <div class="glass">
+    <div class="log-header">
+      <span class="log-title">📋 거래 내역</span>
+      <div class="log-controls">
+        <div id="filterBtns" style="display:flex;gap:6px">
+          <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
+          <button class="filter-btn" onclick="setFilter('income',this)">수입</button>
+          <button class="filter-btn" onclick="setFilter('expense',this)">지출</button>
+        </div>
+        <div class="view-toggle">
+          <button class="view-btn active" id="btnList" onclick="setView('list')">☰ 목록</button>
+          <button class="view-btn" id="btnCal" onclick="setView('cal')">📅 달력</button>
+        </div>
+      </div>
+    </div>
+    <div id="logList" class="log-list"></div>
+    <div id="calView" style="display:none"></div>
   </div>
 
   <!-- Recurring Payments -->
@@ -725,26 +814,6 @@
     </div>
 
     <div class="rec-list" id="recList"></div>
-  </div>
-
-  <!-- Log -->
-  <div class="glass">
-    <div class="log-header">
-      <span class="log-title">📋 거래 내역</span>
-      <div class="log-controls">
-        <div id="filterBtns" style="display:flex;gap:6px">
-          <button class="filter-btn active" onclick="setFilter('all',this)">전체</button>
-          <button class="filter-btn" onclick="setFilter('income',this)">수입</button>
-          <button class="filter-btn" onclick="setFilter('expense',this)">지출</button>
-        </div>
-        <div class="view-toggle">
-          <button class="view-btn active" id="btnList" onclick="setView('list')">☰ 목록</button>
-          <button class="view-btn" id="btnCal" onclick="setView('cal')">📅 달력</button>
-        </div>
-      </div>
-    </div>
-    <div id="logList" class="log-list"></div>
-    <div id="calView" style="display:none"></div>
   </div>
 </div>
 <div class="toast-wrap" id="toastWrap"></div>
@@ -938,7 +1007,8 @@ async function fbSaveUserData(code){
       titleIcon:     localStorage.getItem(uk('titleIcon')) || '💰',
       personColors:  JSON.parse(localStorage.getItem(uk('personColors'))|| 'null'),
       prevPct:       parseFloat(localStorage.getItem(uk('prevPct'))      || '0'),
-      animalType:    localStorage.getItem(uk('animalType')) || 'cat',
+      animalType:    localStorage.getItem(uk('animalType'))    || 'cat',
+      weeklyBudget:  parseFloat(localStorage.getItem(uk('weeklyBudget')) || '0'),
       syncedAt:      Date.now()
     };
     await db.collection('userdata').doc(code).set(payload);
@@ -1046,6 +1116,7 @@ async function doLogin(){
       if(fbData.personColors)  localStorage.setItem(uk('personColors'),  JSON.stringify(fbData.personColors));
       if(fbData.prevPct!=null) localStorage.setItem(uk('prevPct'),       String(fbData.prevPct));
       if(fbData.animalType)    localStorage.setItem(uk('animalType'),    fbData.animalType);
+      if(fbData.weeklyBudget)  localStorage.setItem(uk('weeklyBudget'),  String(fbData.weeklyBudget));
     }
   }
   hideLoginOverlay(); loadUserData(); initApp();
@@ -1165,7 +1236,8 @@ function loadUserData(){
   photoDataURL=localStorage.getItem(uk('photoDataURL'))||'';
   personColors=JSON.parse(localStorage.getItem(uk('personColors'))||'null');
   prevPct    =parseFloat(localStorage.getItem(uk('prevPct'))||'0');
-  animalType =localStorage.getItem(uk('animalType'))   ||'cat';
+  animalType   = localStorage.getItem(uk('animalType'))    || 'cat';
+  weeklyBudget = parseFloat(localStorage.getItem(uk('weeklyBudget')) || '0');
 }
 
 // ─── User data variables (populated on login) ───
@@ -1174,7 +1246,8 @@ let appTitle    = '저축 트래커';
 let selectedIcon= '💰';
 let photoDataURL= '';
 let personColors= null;
-let animalType  = 'cat'; // cat | dog | hamster | horse | fox
+let animalType   = 'cat'; // cat | dog | hamster | horse | fox
+let weeklyBudget = 0;
 let currentType ='income', currentFilter='all', currentView='list';
 let prevPct     = 0;
 let calYear, calMonth, calSelectedDate=null;
@@ -1971,6 +2044,7 @@ function render(isFirst){
   const rem=goal-(tc<0?0:tc);
   document.getElementById('remainDisplay').textContent=rem>0?`남은 금액: ${fmt(rem)}`:'🎉 목표 달성!';
   updateCharacter(pct,isFirst);
+  renderWeeklyBudget();
   renderLog();
   if(currentView==='cal') renderCalendar();
 }
@@ -2092,6 +2166,97 @@ function saveRec(){
   if(fbReady && currentUser) fbSaveUserData(currentUser);
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  주간 예산 (Weekly Budget)
+// ═══════════════════════════════════════════════════════════════
+function getWeekStart(){
+  const now = new Date();
+  const day = now.getDay(); // 0=일, 1=월 ... 6=토
+  const diff = (day === 0) ? 6 : day - 1; // 월요일 기준
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - diff);
+  mon.setHours(0,0,0,0);
+  return mon;
+}
+
+function getWeeklyExpenses(){
+  const weekStart = getWeekStart();
+  return data.records
+    .filter(r => r.type === 'expense' && new Date(r.date) >= weekStart)
+    .reduce((s,r) => s + r.amount, 0);
+}
+
+function getDaysLeftInWeek(){
+  const now  = new Date();
+  const day  = now.getDay();
+  const sun  = new Date(now);
+  sun.setDate(now.getDate() + (day === 0 ? 0 : 7 - day));
+  sun.setHours(23,59,59,999);
+  return Math.ceil((sun - now) / 86400000);
+}
+
+function setWeeklyBudget(){
+  const val = parseFloat(document.getElementById('weeklyBudgetInput').value);
+  if(!val || val <= 0){ toast('올바른 금액을 입력하세요.','error'); return; }
+  weeklyBudget = val;
+  localStorage.setItem(uk('weeklyBudget'), String(weeklyBudget));
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+  renderWeeklyBudget();
+  toast('주간 예산이 설정됐어요! 💰','success');
+}
+
+function resetWeeklyBudget(){
+  document.getElementById('wbSetupArea').style.display = '';
+  document.getElementById('wbContentArea').style.display = 'none';
+  document.getElementById('weeklyBudgetInput').value = weeklyBudget > 0 ? weeklyBudget : '';
+}
+
+function renderWeeklyBudget(){
+  if(!currentUser) return;
+  const daysLeft = getDaysLeftInWeek();
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const now = new Date();
+  document.getElementById('wbDaysBadge').textContent =
+    `${dayNames[now.getDay()]}요일 · ${daysLeft}일 남음`;
+
+  if(weeklyBudget <= 0){
+    document.getElementById('wbSetupArea').style.display = '';
+    document.getElementById('wbContentArea').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('wbSetupArea').style.display = 'none';
+  document.getElementById('wbContentArea').style.display = '';
+
+  const spent  = getWeeklyExpenses();
+  const remain = weeklyBudget - spent;
+  const usedPct = Math.min(100, Math.round((spent / weeklyBudget) * 100));
+
+  // 금액 표시
+  document.getElementById('wbBudgetVal').textContent = fmt(weeklyBudget);
+  document.getElementById('wbSpentVal').textContent  = fmt(spent);
+  document.getElementById('wbRemainVal').textContent = remain >= 0 ? fmt(remain) : '-'+fmt(Math.abs(remain));
+  document.getElementById('wbUsedPct').textContent   = usedPct + '% 사용';
+
+  // 남은 금액 색상
+  const rEl = document.getElementById('wbRemainVal');
+  rEl.className = 'wb-stat-value ' +
+    (remain < 0          ? 'wb-remain-over' :
+     usedPct >= 80       ? 'wb-remain-low'  : 'wb-remain-ok');
+
+  // 진행 바 색상 (초록→주황→빨강)
+  const barColor =
+    usedPct <= 50  ? `linear-gradient(90deg,#34d399,#10b981)` :
+    usedPct <= 80  ? `linear-gradient(90deg,#fbbf24,#f97316)` :
+                     `linear-gradient(90deg,#f97316,#ef4444)`;
+  const bar = document.getElementById('wbBarFill');
+  bar.style.width = usedPct + '%';
+  bar.style.background = barColor;
+
+  // 초과 경고
+  document.getElementById('wbWarn').style.display = remain < 0 ? 'block' : 'none';
+}
+
 function setRecCycle(c){
   recCycle = c;
   document.getElementById('recCycleMonth').className = c==='monthly'?'active':'';
@@ -2118,203 +2283,4 @@ const REC_ICONS = {
   '넷플릭스':'🎬','유튜브':'▶️','스포티파이':'🎵','멜론':'🎵','왓챠':'🎞️','디즈니':'🏰',
   '애플':'🍎','아마존':'📦','쿠팡':'🛒','카카오':'💛','네이버':'🟢','구글':'🔍',
   '마이크로소프트':'🪟','어도비':'🎨','드롭박스':'📁','슬랙':'💬','줌':'📹',
-  '통신':'📱','인터넷':'🌐','보험':'🛡️','월세':'🏠','관리비':'🏢','헬스장':'💪',
-};
-function getRecIcon(name){
-  for(const [k,v] of Object.entries(REC_ICONS)){
-    if(name.includes(k)) return v;
-  }
-  return '🔄';
-}
-
-function addRecurring(){
-  const name   = document.getElementById('recItemName').value.trim();
-  const amount = parseFloat(document.getElementById('recAmount').value);
-  const day    = parseInt(document.getElementById('recDay').value);
-  if(!name){toast('서비스명을 입력하세요.','error');return;}
-  if(!amount||amount<=0){toast('올바른 금액을 입력하세요.','error');return;}
-  recurringData.push({id:Date.now(), name, amount, cycle:recCycle, day});
-  saveRec(); renderRecurring();
-  document.getElementById('recItemName').value='';
-  document.getElementById('recAmount').value='';
-  toast(`${name} 정기 결제 추가! ${fmt(amount)}`,'success');
-}
-
-function deleteRecurring(id){
-  recurringData = recurringData.filter(r=>r.id!==id);
-  saveRec(); renderRecurring();
-  toast('정기 결제 삭제','info');
-}
-
-function payNow(id){
-  const rec = recurringData.find(r=>r.id===id);
-  if(!rec) return;
-  const today = new Date().toISOString().split('T')[0];
-  data.records.unshift({id:Date.now(), date:today, desc:rec.name+' (정기결제)', amount:rec.amount, type:'expense', category:'주거/통신'});
-  save(); render();
-  toast(`${rec.name} ${fmt(rec.amount)} 지출 기록! 💳`,'error');
-}
-
-function getDaysUntilNext(rec){
-  const now = new Date();
-  const today = now.getDate();
-  const thisMonth = now.getMonth();
-  const thisYear = now.getFullYear();
-  if(rec.cycle==='monthly'){
-    let nextDate = new Date(thisYear, thisMonth, rec.day);
-    if(nextDate <= now) nextDate = new Date(thisYear, thisMonth+1, rec.day);
-    return Math.ceil((nextDate - now) / 86400000);
-  } else {
-    let nextDate = new Date(thisYear, rec.day-1, 1);
-    if(nextDate <= now) nextDate = new Date(thisYear+1, rec.day-1, 1);
-    return Math.ceil((nextDate - now) / 86400000);
-  }
-}
-
-function toMonthlyAmount(rec){
-  return rec.cycle==='monthly' ? rec.amount : rec.amount/12;
-}
-
-function renderRecurring(){
-  const now = new Date();
-  const thisMonth = now.getMonth(), thisYear = now.getFullYear();
-
-  // Totals
-  const monthlyTotal = recurringData.reduce((s,r)=>s+toMonthlyAmount(r),0);
-  const yearlyTotal  = recurringData.reduce((s,r)=>s+(r.cycle==='yearly'?r.amount:r.amount*12),0);
-  const remaining    = recurringData.filter(r=>{
-    if(r.cycle!=='monthly') return false;
-    const paid = data.records.some(rec=>
-      rec.type==='expense' && rec.desc.includes(r.name) &&
-      new Date(rec.date).getMonth()===thisMonth && new Date(rec.date).getFullYear()===thisYear
-    );
-    return !paid && r.day >= now.getDate();
-  }).length;
-
-  document.getElementById('recCount').textContent = recurringData.length;
-  document.getElementById('recMonthlyTotal').textContent = fmt(monthlyTotal);
-  document.getElementById('recYearlyTotal').textContent  = fmt(yearlyTotal);
-  document.getElementById('recRemainingCount').textContent = `${remaining}건`;
-
-  const list = document.getElementById('recList');
-  if(!recurringData.length){
-    list.innerHTML=`<div class="empty-state"><div class="icon">🔄</div><div>정기 결제 항목이 없습니다.</div></div>`;
-    return;
-  }
-
-  const sorted = [...recurringData].sort((a,b)=>getDaysUntilNext(a)-getDaysUntilNext(b));
-  list.innerHTML = sorted.map(r=>{
-    const days = getDaysUntilNext(r);
-    const soon = days <= 7;
-    const nextLabel = days===0?'오늘 결제!':days===1?'내일 결제!':days<=7?`${days}일 후`:days<=30?`${days}일 후`:`${days}일 후`;
-    const cycleLabel = r.cycle==='monthly'?`매월 ${r.day}일`:`매년 ${r.day}월`;
-    const cycleBadge = r.cycle==='monthly'?'monthly':'yearly';
-    return `<div class="rec-item">
-      <div class="rec-icon">${getRecIcon(r.name)}</div>
-      <div class="rec-info">
-        <div class="rec-name">${escHtml(r.name)}</div>
-        <div class="rec-meta">
-          <span class="rec-cycle-badge ${cycleBadge}">${r.cycle==='monthly'?'월간':'연간'}</span>
-          <span class="rec-day-badge">${cycleLabel}</span>
-          <span class="rec-next-badge ${soon?'soon':'ok'}">${nextLabel}</span>
-        </div>
-      </div>
-      <div class="rec-amount">${fmt(r.amount)}</div>
-      <div class="rec-actions">
-        <button class="rec-pay-btn" onclick="payNow(${r.id})">지출 기록</button>
-        <button class="rec-del-btn" onclick="deleteRecurring(${r.id})">✕</button>
-      </div>
-    </div>`;
-  }).join('');
-}
-
-function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function toast(msg,type='info'){
-  const wrap=document.getElementById('toastWrap');
-  const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; wrap.appendChild(el);
-  setTimeout(()=>{el.classList.add('hide');setTimeout(()=>el.remove(),300);},2500);
-}
-
-// ═══════════════════════════════════════════════════════════════
-//  INIT
-// ═══════════════════════════════════════════════════════════════
-function initApp(){
-  emojiCache={};
-  // 동물 선택 버튼 활성화
-  document.querySelectorAll('.animal-btn').forEach(b=>{
-    const t=b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
-    b.classList.toggle('active', t===animalType);
-  });
-  document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
-  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
-  document.getElementById('titleText').textContent=appTitle;
-  document.getElementById('iconTrigger').textContent=selectedIcon;
-  document.title=appTitle;
-  if(photoDataURL){
-    document.getElementById('photoThumbImg').src=photoDataURL;
-    document.getElementById('photoThumb').style.display='block';
-    document.getElementById('uploadPill').style.display='none';
-  } else {
-    document.getElementById('photoThumb').style.display='none';
-    document.getElementById('uploadPill').style.display='flex';
-  }
-  if(personColors) rebuildCache();
-  render(true);
-  populateRecDaySelect();
-  renderRecurring();
-  updateCategorySelect('income');
-  // 창 크기 바뀔 때 러너 위치 재계산
-  window.addEventListener('resize', ()=>{
-    const pct = data.goal>0
-      ? Math.min(100,(data.currentBase + data.records.reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100)
-      : 0;
-    updateProgressRunner(pct);
-  });
-}
-
-// ── 시작 시 Firebase 초기화 + 자동 로그인 체크 ──
-(async function(){
-  document.getElementById('todayDate').textContent=
-    new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
-
-  // Firebase 초기화 (연결 테스트 포함)
-  await fbInit();
-
-  // Firebase 연결 시 — 사용자 목록 동기화 (다른 기기에서 가입한 계정도 로그인 가능)
-  if(fbReady){
-    showFbLoading('연결 중...');
-    const fbUsers = await fbGetUsers();
-    hideFbLoading();
-    if(fbUsers && Object.keys(fbUsers).length > 0){
-      const localUsers = getUsers();
-      const merged = Object.assign({}, localUsers, fbUsers);
-      saveUsers(merged);
-    }
-  }
-
-  const autoData=JSON.parse(localStorage.getItem('__autoLogin__')||'null');
-  const users=getUsers();
-
-  if(autoData && users[autoData.code]){
-    // 자동 로그인 데이터 유효 → 1단계 건너뛰고 2단계로
-    pendingCode=autoData.code;
-    const uname=users[autoData.code].name||'';
-    document.getElementById('loginSubText').textContent=
-      (uname?uname+'님, ':'')+'4자리 인증번호를 입력하세요';
-    showView('viewLogin');
-  } else {
-    // 자동 로그인 없음 → 1단계 로그인
-    showView('viewStage1');
-  }
-})();
-</script>
-
-<!-- Firebase 로딩 오버레이 -->
-<div id="fbLoading" class="fb-loading" style="display:none">
-  <div class="fb-loading-card">
-    <div class="fb-spinner"></div>
-    <div class="fb-loading-text" id="fbLoadingText">연결 중...</div>
-  </div>
-</div>
-</body>
-</html>
+  '통신':'📱','인터넷':'🌐','
