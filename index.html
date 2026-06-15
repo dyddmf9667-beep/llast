@@ -1913,12 +1913,13 @@ function updateCharacter(pct,isFirst){
 }
 
 // ── 달성률 게이지 동물 러너 — 좌우 순찰 ──
-let _prX=0, _prDir=1, _prMax=0, _prSpd=1, _prTimer=null;
+let _prX=0, _prDir=1, _prMax=0, _prSpd=1, _prTimer=null, _prSz=46;
 
 function _patrolStep(){
   _prX += _prSpd * _prDir;
+  const minX = _prSz / 2; // translateX(-50%)를 상쇄 — 카드 밖으로 나가지 않도록
   if(_prX >= _prMax){ _prX = _prMax; _prDir = -1; }
-  if(_prX <= 0)     { _prX = 0;      _prDir =  1; }
+  if(_prX <= minX)  { _prX = minX;   _prDir =  1; }
   const el = document.getElementById('progressRunner');
   if(el) el.style.left = Math.round(_prX) + 'px';
 }
@@ -1950,6 +1951,7 @@ function updateProgressRunner(pct){
 
   // 러너 크기 (달성률 높을수록 조금 더 크게)
   const sz = 46 + Math.floor(clamp/100*16);
+  _prSz = sz; // _patrolStep에서 최소 위치 계산에 사용
   runner.style.width  = sz+'px';
   runner.style.height = (sz+28)+'px';
   runner.style.transition = 'none'; // rAF이 직접 제어하므로 CSS transition 제거
