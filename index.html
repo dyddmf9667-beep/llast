@@ -148,6 +148,7 @@
     .btn-primary{background:linear-gradient(135deg,#a78bfa,#6366f1);color:#fff;box-shadow:0 4px 16px rgba(99,102,241,.3)}
     .btn-primary:hover{box-shadow:0 6px 22px rgba(99,102,241,.4)}
     .btn-ghost{background:rgba(255,255,255,.5);border:1.5px solid rgba(255,255,255,.7);color:rgba(45,45,58,.7)}
+    .btn-icon{flex-shrink:0;width:42px;height:42px;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:1.25rem;line-height:1}
     .form-title{font-size:1rem;font-weight:700;margin-bottom:16px}
     .form-grid{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;align-items:center}
     @media(max-width:520px){.form-grid{grid-template-columns:1fr}}
@@ -711,13 +712,13 @@
       <div class="bd-item"><div class="bd-dot" style="background:linear-gradient(135deg,#a78bfa,#6366f1)"></div><span style="color:rgba(45,45,58,.5)">합계</span><strong id="netSaving" style="background:linear-gradient(90deg,#a855f7,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent">₩0</strong></div>
     </div>
     <div class="setup-row">
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;min-width:0">
         <input class="pill-input" type="number" id="currentBaseInput" placeholder="현재 보유 금액 (원)" min="0"/>
-        <button class="btn btn-primary" style="white-space:nowrap;padding:10px 14px" onclick="setCurrentBase()">보유 설정</button>
+        <button class="btn btn-primary btn-icon" onclick="setCurrentBase()" title="보유 설정">✓</button>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;min-width:0">
         <input class="pill-input" type="number" id="goalInput" placeholder="목표 금액 (원)" min="0"/>
-        <button class="btn btn-primary" style="white-space:nowrap;padding:10px 14px" onclick="setGoal()">목표 설정</button>
+        <button class="btn btn-primary btn-icon" onclick="setGoal()" title="목표 설정">✓</button>
       </div>
     </div>
   </div>
