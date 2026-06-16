@@ -185,6 +185,9 @@
     .log-amount.expense{color:#e11d48}
     .log-del{width:28px;height:28px;border-radius:999px;border:none;background:rgba(225,29,72,.09);color:#e11d48;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;transition:background .2s}
     .log-del:hover{background:rgba(225,29,72,.18)}
+    .log-edit{width:28px;height:28px;border-radius:999px;border:none;background:rgba(99,102,241,.1);color:#6366f1;cursor:pointer;font-size:.78rem;display:flex;align-items:center;justify-content:center;transition:background .2s}
+    .log-edit:hover{background:rgba(99,102,241,.2)}
+    .log-actions{display:flex;gap:6px;flex-shrink:0}
 
     /* ── Calendar ── */
     .cal-wrap{animation:fadeIn .3s ease}
@@ -229,7 +232,11 @@
     .dd-del{width:26px;height:26px;border-radius:999px;border:none;background:rgba(225,29,72,.09);color:#e11d48;cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center}
     .dd-del:hover{background:rgba(225,29,72,.2)}
 
-    .day-group{font-size:.75rem;font-weight:700;color:rgba(45,45,58,.4);text-transform:uppercase;letter-spacing:.8px;padding:4px 0 2px}
+    .day-group{font-size:.75rem;font-weight:700;color:rgba(45,45,58,.4);text-transform:uppercase;letter-spacing:.8px;padding:6px 4px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;border-radius:8px;transition:background .15s}
+    .day-group:hover{background:rgba(255,255,255,.3)}
+    .day-group-arrow{font-size:.6rem;transition:transform .2s;display:inline-block}
+    .day-group.collapsed .day-group-arrow{transform:rotate(-90deg)}
+    .day-group-count{margin-left:auto;font-size:.68rem;font-weight:600;opacity:.65;text-transform:none;letter-spacing:0}
     .empty-state{text-align:center;padding:36px;color:rgba(45,45,58,.4);font-size:.88rem}
     .empty-state .icon{font-size:2.5rem;margin-bottom:8px}
     .toast-wrap{position:fixed;bottom:28px;right:28px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
@@ -786,8 +793,9 @@
       </div>
       <select class="pill-input" id="recordCategory" style="width:100%;cursor:pointer"></select>
       <div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">
+        <button class="btn btn-ghost" id="cancelEditBtn" style="display:none" onclick="cancelEdit()">취소</button>
         <button class="btn btn-ghost" onclick="clearForm()">초기화</button>
-        <button class="btn btn-primary" onclick="addRecord()">기록 추가</button>
+        <button class="btn btn-primary" id="addRecordBtn" onclick="addRecord()">기록 추가</button>
       </div>
     </div>
   </div>
@@ -2201,6 +2209,7 @@ function setGoal(){
   document.getElementById('goalInput').value='';
   toast('목표 금액 설정!','info');
 }
+let editingId=null;
 function addRecord(){
   const date=document.getElementById('recordDate').value;
   const desc=document.getElementById('recordDesc').value.trim();
@@ -2209,6 +2218,18 @@ function addRecord(){
   if(!desc){toast('내용을 입력하세요.','error');return;}
   if(!amount||amount<=0){toast('올바른 금액을 입력하세요.','error');return;}
   const category=document.getElementById('recordCategory').value||'기타';
+  if(editingId!=null){
+    const r=data.records.find(x=>x.id===editingId);
+    if(r){ r.date=date; r.desc=desc; r.amount=amount; r.type=currentType; r.category=category; }
+    editingId=null;
+    document.getElementById('addRecordBtn').textContent='기록 추가';
+    document.getElementById('cancelEditBtn').style.display='none';
+    save(); render();
+    document.getElementById('recordDesc').value='';
+    document.getElementById('recordAmount').value='';
+    toast('내역 수정 완료! ✏️','info');
+    return;
+  }
   data.records.unshift({id:Date.now(),date,desc,amount,type:currentType,category});
   save(); render();
   document.getElementById('recordDesc').value='';
@@ -2216,7 +2237,31 @@ function addRecord(){
   toast(currentType==='income'?`수입 ${fmt(amount)} 기록! 💚`:`지출 ${fmt(amount)} 기록! 🔴`,
         currentType==='income'?'success':'error');
 }
-function deleteRecord(id){ data.records=data.records.filter(r=>r.id!==id); save(); render(); toast('내역 삭제','info'); }
+function editRecord(id){
+  const r=data.records.find(x=>x.id===id);
+  if(!r) return;
+  editingId=id;
+  setType(r.type);
+  document.getElementById('recordDate').value=r.date;
+  document.getElementById('recordDesc').value=r.desc;
+  document.getElementById('recordAmount').value=r.amount;
+  updateCategorySelect(r.type);
+  document.getElementById('recordCategory').value=r.category;
+  document.getElementById('addRecordBtn').textContent='수정 완료';
+  document.getElementById('cancelEditBtn').style.display='inline-block';
+  document.querySelector('.form-title').scrollIntoView({behavior:'smooth',block:'center'});
+  toast('내역을 수정하세요 ✏️','info');
+}
+function cancelEdit(){
+  editingId=null;
+  clearForm();
+  document.getElementById('addRecordBtn').textContent='기록 추가';
+  document.getElementById('cancelEditBtn').style.display='none';
+}
+function deleteRecord(id){
+  if(editingId===id) cancelEdit();
+  data.records=data.records.filter(r=>r.id!==id); save(); render(); toast('내역 삭제','info');
+}
 function clearForm(){
   document.getElementById('recordDesc').value='';
   document.getElementById('recordAmount').value='';
@@ -2250,6 +2295,12 @@ function render(isFirst){
 }
 
 // ─── LIST LOG ───
+let collapsedDays=new Set();
+function toggleDayGroup(date){
+  if(collapsedDays.has(date)) collapsedDays.delete(date);
+  else collapsedDays.add(date);
+  renderLog();
+}
 function renderLog(){
   const list=document.getElementById('logList');
   const recs=currentFilter==='all'?data.records:data.records.filter(r=>r.type===currentFilter);
@@ -2260,7 +2311,13 @@ function renderLog(){
   const sorted=Object.keys(g).sort((a,b)=>b.localeCompare(a));
   list.innerHTML='';
   sorted.forEach(date=>{
-    const dh=document.createElement('div'); dh.className='day-group'; dh.textContent=fmtDate(date); list.appendChild(dh);
+    const isCollapsed=collapsedDays.has(date);
+    const dh=document.createElement('div');
+    dh.className='day-group'+(isCollapsed?' collapsed':'');
+    dh.innerHTML=`<span class="day-group-arrow">▼</span><span>${fmtDate(date)}</span><span class="day-group-count">${g[date].length}건</span>`;
+    dh.onclick=()=>toggleDayGroup(date);
+    list.appendChild(dh);
+    if(isCollapsed) return;
     g[date].forEach(r=>{
       const el=document.createElement('div'); el.className='log-item';
       el.innerHTML=`<div class="log-icon ${r.type}">${r.type==='income'?'💚':'🔴'}</div>
@@ -2269,7 +2326,10 @@ function renderLog(){
           ${r.category?`<span class="log-cat ${r.type}">${r.category}</span>`:''}
         </div>
         <div class="log-amount ${r.type}">${r.type==='income'?'+':'-'}${fmt(r.amount)}</div>
-        <button class="log-del" onclick="deleteRecord(${r.id})">✕</button>`;
+        <div class="log-actions">
+          <button class="log-edit" onclick="editRecord(${r.id})">✏️</button>
+          <button class="log-del" onclick="deleteRecord(${r.id})">✕</button>
+        </div>`;
       list.appendChild(el);
     });
   });
