@@ -2295,10 +2295,9 @@ function render(isFirst){
 }
 
 // ─── LIST LOG ───
-let collapsedDays=new Set();
-function toggleDayGroup(date){
-  if(collapsedDays.has(date)) collapsedDays.delete(date);
-  else collapsedDays.add(date);
+let olderCollapsed=true; // 최근 3일 이전 내역은 기본적으로 접어둠
+function toggleOlderLog(){
+  olderCollapsed=!olderCollapsed;
   renderLog();
 }
 function renderLog(){
@@ -2309,15 +2308,15 @@ function renderLog(){
   }
   const g={}; recs.forEach(r=>{(g[r.date]=g[r.date]||[]).push(r);});
   const sorted=Object.keys(g).sort((a,b)=>b.localeCompare(a));
+  const recentDates=sorted.slice(0,3);
+  const olderDates=sorted.slice(3);
   list.innerHTML='';
-  sorted.forEach(date=>{
-    const isCollapsed=collapsedDays.has(date);
-    const dh=document.createElement('div');
-    dh.className='day-group'+(isCollapsed?' collapsed':'');
-    dh.innerHTML=`<span class="day-group-arrow">▼</span><span>${fmtDate(date)}</span><span class="day-group-count">${g[date].length}건</span>`;
-    dh.onclick=()=>toggleDayGroup(date);
+
+  const renderDayGroup=(date)=>{
+    const dh=document.createElement('div'); dh.className='day-group';
+    dh.innerHTML=`<span>${fmtDate(date)}</span><span class="day-group-count">${g[date].length}건</span>`;
+    dh.style.cursor='default';
     list.appendChild(dh);
-    if(isCollapsed) return;
     g[date].forEach(r=>{
       const el=document.createElement('div'); el.className='log-item';
       el.innerHTML=`<div class="log-icon ${r.type}">${r.type==='income'?'💚':'🔴'}</div>
@@ -2332,7 +2331,19 @@ function renderLog(){
         </div>`;
       list.appendChild(el);
     });
-  });
+  };
+
+  recentDates.forEach(renderDayGroup);
+
+  if(olderDates.length){
+    const olderCount=olderDates.reduce((s,d)=>s+g[d].length,0);
+    const toggle=document.createElement('div');
+    toggle.className='day-group older-toggle'+(olderCollapsed?' collapsed':'');
+    toggle.innerHTML=`<span class="day-group-arrow">▼</span><span>이전 내역</span><span class="day-group-count">${olderCount}건</span>`;
+    toggle.onclick=toggleOlderLog;
+    list.appendChild(toggle);
+    if(!olderCollapsed) olderDates.forEach(renderDayGroup);
+  }
 }
 
 // ─── CALENDAR ───
