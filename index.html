@@ -240,6 +240,12 @@
     .empty-state{text-align:center;padding:36px;color:rgba(45,45,58,.4);font-size:.88rem}
     .empty-state .icon{font-size:2.5rem;margin-bottom:8px}
     .toast-wrap{position:fixed;bottom:28px;right:28px;z-index:999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+
+    /* ── 광고 배너 ── */
+    .ad-banner-wrap{width:100%;display:flex;justify-content:center;padding:8px 0 4px;margin-top:4px}
+    .ad-banner-placeholder{width:320px;height:100px;border-radius:12px;border:2px dashed rgba(167,139,250,.35);background:rgba(255,255,255,.25);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px}
+    .ad-banner-label{font-size:.6rem;font-weight:800;letter-spacing:1.5px;color:rgba(45,45,58,.3);background:rgba(167,139,250,.15);padding:2px 8px;border-radius:999px}
+    .ad-banner-text{font-size:.78rem;color:rgba(45,45,58,.35);font-weight:500}
     .toast{padding:12px 22px;border-radius:16px;font-size:.88rem;font-weight:600;backdrop-filter:blur(16px);border:1.5px solid rgba(255,255,255,.6);box-shadow:0 8px 24px rgba(0,0,0,.12);animation:toastIn .35s cubic-bezier(.4,0,.2,1) forwards}
     .toast.hide{animation:toastOut .3s ease forwards}
     .toast.success{background:rgba(52,211,153,.88);color:#fff}
@@ -893,6 +899,26 @@
 
     <div class="rec-list" id="recList"></div>
   </div>
+
+  <!-- ════════════════════════════════════════
+       📢 광고 배너 영역
+       ─────────────────────────────────────────
+       ① 이미지 배너: <img> 태그의 src만 교체
+       ② 링크 추가:   <a href="URL"> 로 감싸기
+       ③ 구글 애드센스: <ins class="adsbygoogle"> 코드 붙여넣기
+       ④ 완전히 숨기기: display:none 으로 변경
+  ════════════════════════════════════════ -->
+  <div class="ad-banner-wrap" id="adBannerWrap">
+
+    <!-- ─── 여기서부터 광고 코드를 교체하세요 ─── -->
+    <div class="ad-banner-placeholder">
+      <span class="ad-banner-label">AD</span>
+      <span class="ad-banner-text">광고 영역 (320×100)</span>
+    </div>
+    <!-- ─── 여기까지 ─── -->
+
+  </div>
+
 </div>
 <div class="toast-wrap" id="toastWrap"></div>
 
