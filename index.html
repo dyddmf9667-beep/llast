@@ -304,7 +304,7 @@
     .auth-view.active{display:flex}
     .auth-logo{font-size:2.8rem;line-height:1}
     .auth-logo img{width:80px;height:80px;border-radius:22px;object-fit:cover;box-shadow:0 4px 16px rgba(100,80,160,.18)}
-    .header-logo{width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0;box-shadow:0 2px 8px rgba(100,80,160,.15)}
+    .header-logo{width:56px;height:56px;border-radius:14px;object-fit:cover;flex-shrink:0;box-shadow:0 2px 8px rgba(100,80,160,.15)}
     .auth-title{font-size:1.45rem;font-weight:800;background:linear-gradient(90deg,#a855f7,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px}
     .auth-sub{font-size:.8rem;color:rgba(45,45,58,.48);font-weight:600;text-align:center;line-height:1.5}
     .auth-field{width:100%;display:flex;flex-direction:column;gap:5px}
@@ -683,7 +683,7 @@
         <span class="icon-trigger" id="iconTrigger">💰</span>
         <div class="icon-panel" id="iconPanel" style="display:none"></div>
       </div>
-      <span class="title-text" id="titleText" onclick="startEditTitle()"></span>
+      <span class="title-text" id="titleText" style="display:none"></span>
       <input class="title-input" id="titleInput" style="display:none" onblur="saveTitle()" onkeydown="if(event.key==='Enter')saveTitle()"/>
     </div>
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex:1;min-width:0">
@@ -914,7 +914,7 @@
   <div class="ad-banner-wrap" id="adBannerWrap">
 
     <!-- ─── 여기서부터 광고 코드를 교체하세요 ─── -->
-   <img src="abc.png"
+   <img src="abc.jpg"
      style="width:320px;height:100px;border-radius:12px;object-fit:cover;display:block"/>
     <!-- ─── 여기까지 ─── -->
 
