@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>저축 트래커</title>
+  <title>골머니</title>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -303,6 +303,8 @@
     .auth-view{position:relative;z-index:1;width:100%;max-width:340px;display:none;flex-direction:column;align-items:center;gap:16px;padding:32px 26px}
     .auth-view.active{display:flex}
     .auth-logo{font-size:2.8rem;line-height:1}
+    .auth-logo img{width:80px;height:80px;border-radius:22px;object-fit:cover;box-shadow:0 4px 16px rgba(100,80,160,.18)}
+    .header-logo{width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0;box-shadow:0 2px 8px rgba(100,80,160,.15)}
     .auth-title{font-size:1.45rem;font-weight:800;background:linear-gradient(90deg,#a855f7,#6366f1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:-.5px}
     .auth-sub{font-size:.8rem;color:rgba(45,45,58,.48);font-weight:600;text-align:center;line-height:1.5}
     .auth-field{width:100%;display:flex;flex-direction:column;gap:5px}
@@ -523,8 +525,8 @@
 
   <!-- ▌1단계: 로그인 -->
   <div class="auth-view glass active" id="viewStage1">
-    <div class="auth-logo">💰</div>
-    <div class="auth-title">저축 트래커</div>
+    <div class="auth-logo"><img src="logo.png" alt="골머니"/></div>
+    <div class="auth-title">골머니</div>
     <div class="stage1-badge">1단계 · 로그인</div>
     <div id="fbStatusBanner" style="display:none;width:100%;padding:8px 12px;border-radius:10px;font-size:.78rem;font-weight:600;text-align:center;margin-bottom:4px"></div>
     <div class="auth-field" style="width:100%">
@@ -563,8 +565,8 @@
 
   <!-- ▌2단계: 간편 인증번호 -->
   <div class="auth-view glass" id="viewLogin">
-    <div class="auth-logo">💰</div>
-    <div class="auth-title">저축 트래커</div>
+    <div class="auth-logo"><img src="logo.png" alt="골머니"/></div>
+    <div class="auth-title">골머니</div>
     <div class="stage2-badge">2단계 · 간편 인증번호</div>
     <div class="auth-sub" id="loginSubText">4자리 인증번호를 입력하세요</div>
     <div class="pin-dots">
@@ -676,8 +678,9 @@
   <!-- Header -->
   <div class="glass header">
     <div class="title-wrap">
-      <div class="icon-picker-wrap">
-        <span class="icon-trigger" id="iconTrigger" onclick="toggleIconPicker()">💰</span>
+      <img src="logo.png" class="header-logo" alt="골머니"/>
+      <div class="icon-picker-wrap" style="display:none">
+        <span class="icon-trigger" id="iconTrigger">💰</span>
         <div class="icon-panel" id="iconPanel" style="display:none"></div>
       </div>
       <span class="title-text" id="titleText" onclick="startEditTitle()"></span>
@@ -911,7 +914,7 @@
   <div class="ad-banner-wrap" id="adBannerWrap">
 
     <!-- ─── 여기서부터 광고 코드를 교체하세요 ─── -->
-    <img src="abc.jpg"
+   <img src="abc.png"
      style="width:320px;height:100px;border-radius:12px;object-fit:cover;display:block"/>
     <!-- ─── 여기까지 ─── -->
 
@@ -1123,7 +1126,7 @@ async function fbSaveUserData(code){
     const payload = {
       savingsData:   JSON.parse(localStorage.getItem(uk('savingsData'))  || '{"goal":0,"currentBase":0,"records":[]}'),
       recurringData: JSON.parse(localStorage.getItem(uk('recurringData'))|| '[]'),
-      appTitle:      localStorage.getItem(uk('appTitle'))  || '저축 트래커',
+      appTitle:      localStorage.getItem(uk('appTitle'))  || '골머니',
       titleIcon:     localStorage.getItem(uk('titleIcon')) || '💰',
       personColors:  JSON.parse(localStorage.getItem(uk('personColors'))|| 'null'),
       prevPct:       parseFloat(localStorage.getItem(uk('prevPct'))      || '0'),
@@ -1436,7 +1439,7 @@ function loadUserData(){
   data=JSON.parse(localStorage.getItem(uk('savingsData'))||'{"goal":0,"currentBase":0,"records":[]}');
   if(!data.currentBase)data.currentBase=0;
   recurringData=JSON.parse(localStorage.getItem(uk('recurringData'))||'[]');
-  appTitle   =localStorage.getItem(uk('appTitle'))     ||'저축 트래커';
+  appTitle   =localStorage.getItem(uk('appTitle'))     ||'골머니';
   selectedIcon=localStorage.getItem(uk('titleIcon'))   ||'💰';
   photoDataURL=localStorage.getItem(uk('photoDataURL'))||'';
   personColors=JSON.parse(localStorage.getItem(uk('personColors'))||'null');
@@ -1447,7 +1450,7 @@ function loadUserData(){
 
 // ─── User data variables (populated on login) ───
 let data        = {goal:0,currentBase:0,records:[]};
-let appTitle    = '저축 트래커';
+let appTitle    = '골머니';
 let selectedIcon= '💰';
 let photoDataURL= '';
 let personColors= null;
@@ -2269,7 +2272,7 @@ function startEditTitle(){
 }
 function saveTitle(){
   const inp=document.getElementById('titleInput');
-  const v=inp.value.trim()||'저축 트래커'; appTitle=v; localStorage.setItem(uk('appTitle'),v);
+  const v=inp.value.trim()||'골머니'; appTitle=v; localStorage.setItem(uk('appTitle'),v);
   document.getElementById('titleText').textContent=v; document.title=v;
   inp.style.display='none'; document.getElementById('titleText').style.display='inline';
   if(fbReady && currentUser) fbSaveUserData(currentUser);
