@@ -1,0 +1,1656 @@
+﻿<script>
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+//  AUTH SYSTEM — 1단계(로그인+자동로그인) + 2단계(간편 인증번호)
+// ═══════════════════════════════════════════════════════════════
+let currentUser  = '';
+let pinBuffer    = '';
+let pendingCode  = '';   // 1단계 통과 후 확인할 코드
+let pendingNpHash= '';
+
+function uk(key){ return key+'_'+currentUser; }
+function getUsers(){ return JSON.parse(localStorage.getItem('__users__')||'{}'); }
+function saveUsers(u){ localStorage.setItem('__users__',JSON.stringify(u)); }
+
+// ═══════════════════════════════════════════════════════════════
+//  FIREBASE — 교차 기기 동기화
+//  ★ 아래 FB_CONFIG 값을 Firebase 콘솔에서 복사한 값으로 교체하세요 ★
+// ═══════════════════════════════════════════════════════════════
+const FB_CONFIG = {
+  apiKey:            "AIzaSyA11_2eGsXrmwD1G-w17eGnmXsRMHApODs",
+  authDomain:        "save-money-f69df.firebaseapp.com",
+  projectId:         "save-money-f69df",
+  storageBucket:     "save-money-f69df.firebasestorage.app",
+  messagingSenderId: "446901259233",
+  appId:             "1:446901259233:web:67a053624a7f354dcc60a0",
+  measurementId:     "G-34RRP5YWSW"
+};
+
+let db       = null;
+let fbReady  = false;
+
+function setFbBanner(state, msg){
+  const b = document.getElementById('fbStatusBanner');
+  if(!b) return;
+  b.style.display = msg ? 'block' : 'none';
+  b.textContent = msg || '';
+  if(state==='ok')      { b.style.background='rgba(52,211,153,.18)'; b.style.color='#065f46'; }
+  if(state==='offline') { b.style.background='rgba(148,163,184,.18)'; b.style.color='#475569'; }
+  if(state==='error')   { b.style.background='rgba(248,113,113,.18)'; b.style.color='#991b1b'; }
+}
+
+async function fbInit(){
+  try {
+    if(FB_CONFIG.apiKey==='YOUR_API_KEY'){
+      setFbBanner('offline','☁️ Firebase 미설정 — 이 기기 전용 모드');
+      return;
+    }
+    if(typeof firebase === 'undefined'){
+      setFbBanner('error','⚠️ Firebase SDK 로드 실패 (네트워크 확인)');
+      return;
+    }
+    if(!firebase.apps.length) firebase.initializeApp(FB_CONFIG);
+    db = firebase.firestore();
+    // 실제 연결 테스트 (읽기 1회)
+    await db.collection('_ping').doc('test').get().catch(()=>{});
+    fbReady = true;
+    setSyncDot('ok');
+    setFbBanner('ok','☁️ 클라우드 동기화 연결됨');
+    setTimeout(()=>setFbBanner('ok',''), 3000);
+  } catch(e){
+    console.warn('[FB] init error:', e);
+    fbReady = false;
+    setSyncDot('offline');
+    setFbBanner('error','⚠️ Firebase 연결 실패: ' + (e.message||e.code||'알 수 없는 오류'));
+  }
+}
+
+function setSyncDot(state){
+  const dot = document.getElementById('syncDot');
+  if(dot) dot.className = 'sync-dot ' + state;
+}
+
+function showFbLoading(msg){
+  document.getElementById('fbLoadingText').textContent = msg || '연결 중...';
+  document.getElementById('fbLoading').style.display  = 'flex';
+}
+function hideFbLoading(){
+  document.getElementById('fbLoading').style.display = 'none';
+}
+
+// ── Firestore: 사용자 목록 ──
+async function fbGetUsers(){
+  if(!fbReady) return null;
+  try {
+    const snap = await db.collection('registry').doc('users').get();
+    return snap.exists ? (snap.data().users || {}) : {};
+  } catch(e){ console.warn('[FB] getUsers:', e); return null; }
+}
+async function fbSaveUsers(users){
+  if(!fbReady){ console.warn('[FB] fbSaveUsers skipped — fbReady=false'); return; }
+  try {
+    await db.collection('registry').doc('users').set({ users });
+    console.log('[FB] users saved OK, count='+Object.keys(users).length);
+  } catch(e){
+    console.error('[FB] saveUsers FAILED:', e.code, e.message);
+    setFbBanner('error','❌ 사용자 저장 실패: '+(e.code||e.message)+'\n→ Firestore 규칙 확인 필요');
+    throw e; // 호출부에서 인지하도록 re-throw
+  }
+}
+
+// ── Firebase 진단 ──
+async function runFbDiagnostic(){
+  const modal   = document.getElementById('diagModal');
+  const content = document.getElementById('diagContent');
+  const loading = document.getElementById('diagLoading');
+  modal.style.display='flex'; content.textContent=''; loading.style.display='block';
+
+  const lines = [];
+  const ok  = t => lines.push('✅ '+t);
+  const err = t => lines.push('❌ '+t);
+  const inf = t => lines.push('ℹ️  '+t);
+
+  // 1. SDK 로드
+  if(typeof firebase === 'undefined'){ err('Firebase SDK 로드 실패 (네트워크 차단?)'); finish(); return; }
+  ok('Firebase SDK 로드됨');
+
+  // 2. 앱 초기화
+  if(!firebase.apps || !firebase.apps.length){ err('firebase.initializeApp 미실행'); finish(); return; }
+  ok('firebase.initializeApp 완료 — 프로젝트: '+FB_CONFIG.projectId);
+
+  // 3. fbReady
+  if(!fbReady){ err('fbReady = false (초기화 실패)'); }
+  else { ok('fbReady = true'); }
+
+  // 4. Firestore db 객체
+  if(!db){ err('db 객체 없음'); finish(); return; }
+  ok('Firestore db 객체 생성됨');
+
+  // 5. 쓰기 테스트
+  try {
+    await db.collection('_diag').doc('ping').set({ ts: Date.now(), from: navigator.userAgent.substring(0,40) });
+    ok('Firestore 쓰기 성공 (_diag/ping)');
+  } catch(e){
+    err('Firestore 쓰기 실패 — '+e.code+': '+e.message);
+    inf('→ Firebase 콘솔 > Firestore > 규칙 탭에서 아래 규칙 적용 필요:\n   allow read, write: if true;');
+  }
+
+  // 6. 읽기 테스트
+  try {
+    const snap = await db.collection('registry').doc('users').get();
+    if(snap.exists){
+      const uCount = Object.keys(snap.data().users||{}).length;
+      ok('Firestore 읽기 성공 — 저장된 사용자 수: '+uCount+'명');
+      if(uCount>0){
+        inf('저장된 코드: '+Object.keys(snap.data().users).join(', '));
+      }
+    } else {
+      ok('Firestore 읽기 성공 (registry/users 문서 없음 — 아직 가입자 없음)');
+    }
+  } catch(e){
+    err('Firestore 읽기 실패 — '+e.code+': '+e.message);
+  }
+
+  // 7. 로컬 사용자 목록
+  const local = getUsers();
+  const lCount = Object.keys(local).length;
+  inf('로컬 저장 사용자 수: '+lCount+'명'+(lCount>0?' (코드: '+Object.keys(local).join(', ')+')':''));
+
+  // 8. 현재 fbReady 재확인
+  inf('현재 로그인 상태: '+(currentUser||'미로그인'));
+
+  finish();
+  function finish(){
+    loading.style.display='none';
+    content.textContent = lines.join('\n');
+  }
+}
+
+// ── Firestore: 사용자 데이터 ──
+async function fbLoadUserData(code){
+  if(!fbReady) return null;
+  try {
+    const snap = await db.collection('userdata').doc(code).get();
+    return snap.exists ? snap.data() : null;
+  } catch(e){ console.warn('[FB] loadUserData:', e); return null; }
+}
+async function fbSaveUserData(code){
+  if(!fbReady || !code) return;
+  try {
+    setSyncDot('syncing');
+    const payload = {
+      savingsData:   JSON.parse(localStorage.getItem(uk('savingsData'))  || '{"goal":0,"currentBase":0,"records":[]}'),
+      recurringData: JSON.parse(localStorage.getItem(uk('recurringData'))|| '[]'),
+      appTitle:      localStorage.getItem(uk('appTitle'))  || '저축 트래커',
+      titleIcon:     localStorage.getItem(uk('titleIcon')) || '💰',
+      personColors:  JSON.parse(localStorage.getItem(uk('personColors'))|| 'null'),
+      prevPct:       parseFloat(localStorage.getItem(uk('prevPct'))      || '0'),
+      animalType:    localStorage.getItem(uk('animalType'))    || 'cat',
+      weeklyBudget:  parseFloat(localStorage.getItem(uk('weeklyBudget')) || '0'),
+      syncedAt:      Date.now()
+    };
+    await db.collection('userdata').doc(code).set(payload);
+    setSyncDot('ok');
+  } catch(e){
+    console.warn('[FB] saveUserData:', e);
+    setSyncDot('error');
+    setTimeout(()=>setSyncDot('ok'), 3000);
+  }
+}
+
+function hashStr(s){
+  let h=5381;
+  for(let i=0;i<s.length;i++){h=((h<<5)+h)+s.charCodeAt(i);h=h&h;}
+  return (h>>>0).toString(16);
+}
+
+// ── 화면 전환 ──
+function showView(id){
+  document.querySelectorAll('.auth-view').forEach(v=>v.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  if(id==='viewLogin'){ pinClear(); document.getElementById('loginError').textContent=''; }
+  if(id==='viewStage1'){ document.getElementById('stage1Error').textContent=''; }
+}
+
+// ══ 1단계: 이름+비밀번호 로그인 ══
+async function doStage1(){
+  const name=document.getElementById('s1Name').value.trim();
+  const pass=document.getElementById('s1Pass').value;
+  if(!name){ document.getElementById('stage1Error').textContent='이름을 입력하세요.'; return; }
+  if(!pass){ document.getElementById('stage1Error').textContent='비밀번호를 입력하세요.'; return; }
+  const npHash=hashStr(name+':'+pass);
+  let users=getUsers();
+  let code=Object.keys(users).find(c=>users[c].npHash===npHash);
+
+  // 로컬에 없으면 Firebase에서 최신 사용자 목록 재조회 (다른 기기에서 가입한 경우)
+  if(!code && fbReady){
+    document.getElementById('stage1Error').textContent='';
+    showFbLoading('계정 확인 중...');
+    const fbUsers=await fbGetUsers();
+    hideFbLoading();
+    if(fbUsers && Object.keys(fbUsers).length>0){
+      const merged=Object.assign({},users,fbUsers);
+      saveUsers(merged);
+      users=merged;
+      code=Object.keys(users).find(c=>users[c].npHash===npHash);
+    }
+  }
+
+  if(!code){
+    const msg = fbReady
+      ? '등록되지 않은 이름 또는 비밀번호입니다.'
+      : '계정을 찾을 수 없습니다.\n(Firebase 연결 실패 — 인터넷 연결 및 Firestore 규칙 확인)';
+    document.getElementById('stage1Error').textContent = msg;
+    return;
+  }
+  // 자동 로그인 처리
+  pendingCode=code;
+  if(document.getElementById('autoLogin').checked){
+    localStorage.setItem('__autoLogin__',JSON.stringify({code, npHash}));
+  } else {
+    localStorage.removeItem('__autoLogin__');
+  }
+  // 2단계로 이동
+  const uEntry=users[code];
+  document.getElementById('loginSubText').textContent=
+    (uEntry.name?uEntry.name+'님, ':'')+'4자리 인증번호를 입력하세요';
+  showView('viewLogin');
+}
+function goBackToStage1(){
+  pendingCode='';
+  localStorage.removeItem('__autoLogin__');
+  showView('viewStage1');
+}
+
+// ══ 2단계: 간편 인증번호 ══
+function pinInput(d){
+  if(pinBuffer.length>=4) return;
+  pinBuffer+=d; updatePinDots();
+  if(pinBuffer.length===4) setTimeout(doLogin,160);
+}
+function pinDelete(){ pinBuffer=pinBuffer.slice(0,-1); updatePinDots(); }
+function pinClear(){ pinBuffer=''; updatePinDots(); }
+function updatePinDots(){
+  for(let i=0;i<4;i++)
+    document.getElementById('pd'+i).className='pin-dot'+(i<pinBuffer.length?' filled':'');
+}
+async function doLogin(){
+  if(pinBuffer.length<4) return;
+  if(pinBuffer!==pendingCode){
+    document.getElementById('loginError').textContent='인증번호가 틀렸습니다.';
+    setTimeout(pinClear,500); return;
+  }
+  currentUser=pinBuffer;
+  // Firestore에서 최신 데이터 불러오기
+  if(fbReady){
+    showFbLoading('데이터를 불러오는 중...');
+    const fbData = await fbLoadUserData(currentUser);
+    hideFbLoading();
+    if(fbData && fbData.savingsData){
+      localStorage.setItem(uk('savingsData'),   JSON.stringify(fbData.savingsData));
+      if(fbData.recurringData) localStorage.setItem(uk('recurringData'), JSON.stringify(fbData.recurringData));
+      if(fbData.appTitle)      localStorage.setItem(uk('appTitle'),      fbData.appTitle);
+      if(fbData.titleIcon)     localStorage.setItem(uk('titleIcon'),     fbData.titleIcon);
+      if(fbData.personColors)  localStorage.setItem(uk('personColors'),  JSON.stringify(fbData.personColors));
+      if(fbData.prevPct!=null) localStorage.setItem(uk('prevPct'),       String(fbData.prevPct));
+      if(fbData.animalType)    localStorage.setItem(uk('animalType'),    fbData.animalType);
+      if(fbData.weeklyBudget)  localStorage.setItem(uk('weeklyBudget'),  String(fbData.weeklyBudget));
+    }
+  }
+  hideLoginOverlay(); loadUserData(); initApp();
+  toast('로그인 성공! 👋','info');
+}
+
+// ══ 회원가입 ══
+function buildCode(name,pass){
+  const key=name+':'+pass;
+  const users=getUsers();
+  const existing=Object.keys(users).find(c=>users[c].npHash===hashStr(key));
+  if(existing) return {code:existing,isNew:false};
+  let h=0;
+  for(let i=0;i<key.length;i++){h=((h<<5)-h)+key.charCodeAt(i);h=h&h;}
+  const base=((h>>>0)%9000)+1000;
+  for(let i=0;i<9000;i++){
+    const code=String(((base-1000+i)%9000)+1000).padStart(4,'0');
+    if(!users[code]) return {code,isNew:true};
+  }
+  return null;
+}
+function generateAndShowCode(){
+  const name=document.getElementById('regName').value.trim();
+  const pass=document.getElementById('regPass').value;
+  if(!name){ document.getElementById('regError').textContent='이름을 입력하세요.'; return; }
+  if(!pass||pass.length<2){ document.getElementById('regError').textContent='비밀번호를 2자 이상 입력하세요.'; return; }
+  document.getElementById('regError').textContent='';
+  const result=buildCode(name,pass);
+  if(!result){ document.getElementById('regError').textContent='사용 가능한 인증번호가 없습니다.'; return; }
+  if(!result.isNew){ document.getElementById('regError').textContent='이미 등록된 이름/비밀번호입니다. 인증번호 찾기를 이용하세요.'; return; }
+  pendingCode=result.code; pendingNpHash=hashStr(name+':'+pass);
+  document.getElementById('generatedCode').textContent=pendingCode;
+  document.getElementById('codeResult').style.display='block';
+  document.getElementById('completeBtn').style.display='block';
+  document.getElementById('genBtn').style.display='none';
+}
+function resetRegResult(){
+  document.getElementById('codeResult').style.display='none';
+  document.getElementById('completeBtn').style.display='none';
+  document.getElementById('genBtn').style.display='block';
+  document.getElementById('regError').textContent='';
+  pendingCode=''; pendingNpHash='';
+}
+async function completeRegistration(){
+  if(!pendingCode) return;
+  const name=document.getElementById('regName').value.trim();
+  const users=getUsers();
+  users[pendingCode]={npHash:pendingNpHash,name,created:Date.now()};
+  saveUsers(users);
+  // Firebase에 사용자 목록 저장 (await로 확실히 반영)
+  if(fbReady){
+    showFbLoading('계정 등록 중...');
+    try {
+      await fbSaveUsers(users);
+      hideFbLoading();
+    } catch(e){
+      hideFbLoading();
+      document.getElementById('regError').textContent =
+        '⚠️ 클라우드 저장 실패 ('+(e.code||e.message)+')\n이 기기에만 저장됩니다. Firestore 규칙을 확인하세요.';
+      // 로컬에는 이미 저장됐으므로 계속 진행
+    }
+  } else {
+    document.getElementById('regError').textContent =
+      '⚠️ Firebase 미연결 — 이 기기에만 저장됩니다. 다른 기기에서는 로그인 불가.';
+  }
+  currentUser=pendingCode;
+  pendingCode=''; pendingNpHash='';
+  hideLoginOverlay(); loadUserData(); initApp();
+  toast('등록 완료! 환영합니다 🎉','success');
+}
+
+// ══ 인증번호 찾기 ══
+function recoverCode(){
+  const name=document.getElementById('recName').value.trim();
+  const pass=document.getElementById('recPass').value;
+  if(!name||!pass){ document.getElementById('recoverError').textContent='이름과 비밀번호를 입력하세요.'; return; }
+  const users=getUsers();
+  const code=Object.keys(users).find(c=>users[c].npHash===hashStr(name+':'+pass));
+  if(code){
+    document.getElementById('recoveredCode').textContent=code;
+    document.getElementById('recoverResult').style.display='block';
+    document.getElementById('recoverError').textContent='';
+  } else {
+    document.getElementById('recoverError').textContent='등록된 정보를 찾을 수 없습니다.';
+    document.getElementById('recoverResult').style.display='none';
+  }
+}
+function resetRecoverResult(){
+  document.getElementById('recoverResult').style.display='none';
+  document.getElementById('recoverError').textContent='';
+}
+
+// ══ 공통 ══
+function hideLoginOverlay(){
+  document.getElementById('loginOverlay').style.display='none';
+  document.getElementById('userChip').style.display='flex';
+  const users=getUsers();
+  const uname=users[currentUser]?.name||currentUser;
+  document.getElementById('userChipName').textContent='👤 '+uname;
+}
+function doLogout(){
+  stopPatrol(); _prX=0; _prDir=1;
+  currentUser=''; pendingCode='';
+  localStorage.removeItem('__autoLogin__');
+  document.getElementById('loginOverlay').style.display='flex';
+  document.getElementById('userChip').style.display='none';
+  document.getElementById('s1Name').value='';
+  document.getElementById('s1Pass').value='';
+  showView('viewStage1');
+}
+function loadUserData(){
+  data=JSON.parse(localStorage.getItem(uk('savingsData'))||'{"goal":0,"currentBase":0,"records":[]}');
+  if(!data.currentBase)data.currentBase=0;
+  recurringData=JSON.parse(localStorage.getItem(uk('recurringData'))||'[]');
+  appTitle   =localStorage.getItem(uk('appTitle'))     ||'저축 트래커';
+  selectedIcon=localStorage.getItem(uk('titleIcon'))   ||'💰';
+  photoDataURL=localStorage.getItem(uk('photoDataURL'))||'';
+  personColors=JSON.parse(localStorage.getItem(uk('personColors'))||'null');
+  prevPct    =parseFloat(localStorage.getItem(uk('prevPct'))||'0');
+  animalType   = localStorage.getItem(uk('animalType'))    || 'cat';
+  weeklyBudget = parseFloat(localStorage.getItem(uk('weeklyBudget')) || '0');
+}
+
+// ─── User data variables (populated on login) ───
+let data        = {goal:0,currentBase:0,records:[]};
+let appTitle    = '저축 트래커';
+let selectedIcon= '💰';
+let photoDataURL= '';
+let personColors= null;
+let animalType   = 'cat'; // cat | dog | hamster | horse | fox
+let weeklyBudget = 0;
+let currentType ='income', currentFilter='all', currentView='list';
+let prevPct     = 0;
+let calYear, calMonth, calSelectedDate=null;
+let emojiCache  = {};
+
+function save(){
+  localStorage.setItem(uk('savingsData'),JSON.stringify(data));
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+}
+function fmt(n){ return '₩'+Math.abs(n).toLocaleString('ko-KR'); }
+function fmtDate(d){ return new Date(d).toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric'}); }
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE DEFINITIONS
+// ═══════════════════════════════════════════════════════════════
+const STATES=[
+  {id:1,minPct:100,emoji:'🏆',label:'목표 달성!',     bg:'#fbbf24',msg:'🏆 목표를 완전히 달성했어요! 정말 대단해요!'},
+  {id:2,minPct: 80,emoji:'🥇',label:'거의 다왔어요!', bg:'#34d399',msg:'🎉 대단해요! 목표까지 얼마 안 남았어요!'},
+  {id:3,minPct: 60,emoji:'😄',label:'순조로워요!',    bg:'#6ee7b7',msg:'💪 좋아요! 이 기세로 계속 달려봐요!'},
+  {id:4,minPct: 40,emoji:'😊',label:'잘하고 있어요',  bg:'#a3e635',msg:'👍 중간 지점! 반 이상 왔어요!'},
+  {id:5,minPct: 20,emoji:'🙂',label:'시작이 좋아요',  bg:'#e2e8f0',msg:'✨ 좋은 시작이에요! 계속 저축해봐요.'},
+  {id:6,minPct: 10,emoji:'😐',label:'조금 더 힘내요', bg:'#cbd5e1',msg:'💭 조금 부족하지만 괜찮아요. 화이팅!'},
+  {id:7,minPct:  5,emoji:'😟',label:'걱정돼요',       bg:'#94a3b8',msg:'😟 지출이 많았군요. 절약해봐요.'},
+  {id:8,minPct:  1,emoji:'😢',label:'많이 줄었어요',  bg:'#64748b',msg:'💸 조금 힘든 시기네요. 다음엔 더 잘할 수 있어요!'},
+  {id:9,minPct:0.1,emoji:'😭',label:'위기예요!',      bg:'#475569',msg:'🌧️ 많이 힘드시죠? 작은 것부터 다시 시작해봐요.'},
+  {id:10,minPct:0, emoji:'💀',label:'절망적이에요',   bg:'#334155',msg:'📉 바닥이에요. 지금이 반전의 기회예요!'},
+];
+const HAPPY_MSGS=['🎉 달성률이 올랐어요! 이대로 계속!','💪 훌륭해요! 목표에 한 발 더!','🌟 재정 관리의 달인이시네요!','🚀 이 기세라면 목표 달성은 시간문제!'];
+const SAD_MSGS  =['😢 달성률이 내려갔어요... 힘내봐요!','💸 지출이 많았군요. 아껴봐요!','😔 곧 회복할 수 있어요!','🌧️ 내일의 나는 더 잘할 거예요!'];
+function getState(pct){ for(const s of STATES) if(pct>=s.minPct) return s; return STATES[9]; }
+
+// ═══════════════════════════════════════════════════════════════
+//  COLOR HELPERS
+// ═══════════════════════════════════════════════════════════════
+function hexToRgb(hex){
+  const n=parseInt(hex.replace('#',''),16);
+  return {r:(n>>16)&255,g:(n>>8)&255,b:n&255};
+}
+function rgbToHex({r,g,b}){return '#'+[r,g,b].map(v=>Math.min(255,Math.max(0,v)).toString(16).padStart(2,'0')).join('')}
+function shadeHex(hex,amt){const {r,g,b}=hexToRgb(hex);return rgbToHex({r:r+amt,g:g+amt,b:b+amt})}
+function blendHex(h1,h2,t){
+  const c1=hexToRgb(h1),c2=hexToRgb(h2);
+  return rgbToHex({r:Math.round(c1.r*(1-t)+c2.r*t),g:Math.round(c1.g*(1-t)+c2.g*t),b:Math.round(c1.b*(1-t)+c2.b*t)});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PHOTO ANALYSIS
+// ═══════════════════════════════════════════════════════════════
+function analyzePhoto(img){
+  const C=document.createElement('canvas'); C.width=120; C.height=120;
+  const ctx=C.getContext('2d'); ctx.drawImage(img,0,0,120,120);
+  const avg=(d)=>{let r=0,g=0,b=0,n=0;for(let i=0;i<d.length;i+=4){if(d[i+3]>100){r+=d[i];g+=d[i+1];b+=d[i+2];n++;}}return n?{r:Math.round(r/n),g:Math.round(g/n),b:Math.round(b/n)}:{r:50,g:30,b:20}};
+  const hair=avg(ctx.getImageData(25,2,70,26).data);
+  const skin=avg(ctx.getImageData(36,36,48,38).data);
+  return { hair:rgbToHex(hair), skin:rgbToHex(skin), eye:rgbToHex({r:Math.round(hair.r*.6),g:Math.round(hair.g*.6),b:Math.round(hair.b*.6)}) };
+}
+function handlePhoto(e){
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    photoDataURL=ev.target.result;
+    localStorage.setItem(uk('photoDataURL'),photoDataURL);
+    document.getElementById('analyzingBadge').style.display='inline-flex';
+    document.getElementById('uploadPill').style.display='none';
+    const tmpImg=new Image();
+    tmpImg.onload=()=>{
+      personColors=analyzePhoto(tmpImg);
+      localStorage.setItem(uk('personColors'),JSON.stringify(personColors));
+      rebuildCache();
+      if(fbReady && currentUser) fbSaveUserData(currentUser);
+      document.getElementById('analyzingBadge').style.display='none';
+      const th=document.getElementById('photoThumb');
+      document.getElementById('photoThumbImg').src=photoDataURL;
+      th.style.display='block';
+      render(); toast('나만의 이모티콘이 생성됐어요 🎨','success');
+    };
+    tmpImg.src=photoDataURL;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  SVG EMOJI BUILDER — ANIMATED, ACCURATE FEATURES
+// ═══════════════════════════════════════════════════════════════
+function rebuildCache(){ STATES.forEach(s=>{ emojiCache[s.id]=buildEmoji(s.id,personColors); }); }
+
+function setAnimal(type){
+  animalType = type;
+  localStorage.setItem(uk('animalType'), type);
+  document.querySelectorAll('.animal-btn').forEach(b=>{
+    const t = b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    b.classList.toggle('active', t===type);
+  });
+  emojiCache={};
+  rebuildCache();
+  render();
+  // 러너 즉시 갱신
+  const runnerPct = data.goal>0 ? Math.min(100,(data.currentBase+(data.records||[]).reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100) : 0;
+  updateProgressRunner(runnerPct);
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+}
+
+// 동물별 기본 색상 (사진 미업로드 시)
+const ANIMAL_DEF = {
+  cat:     {main:'#c8a468', belly:'#f5e8d4', eye:'#3a2010'},
+  dog:     {main:'#c8a468', belly:'#f5e8d4', eye:'#3a2010'},
+  hamster: {main:'#e8c898', belly:'#f8ede0', eye:'#2a1808'},
+  horse:   {main:'#7a5030', belly:'#c8a478', eye:'#2a1808'},
+  fox:     {main:'#d4681a', belly:'#f8ede0', eye:'#3a2010'},
+};
+
+function buildEmoji(sid,colors){
+  // ── 색상 팔레트 — personColors + 동물별 기본값 ──
+  const type   = animalType || 'cat';
+  const def    = ANIMAL_DEF[type] || ANIMAL_DEF.cat;
+  const mainC  = colors?.hair  || def.main;
+  const bellyC = colors?.skin  || def.belly;
+  const eyeC   = colors?.eye   || def.eye;
+  const OL     = '#1a1209';
+  const PINK   = '#f4a8b8';
+  const NOSE   = '#e88a9a';                  // 코
+
+  // ── 상태별 애니메이션 ──
+  const [aN,aD] =
+    sid===1 ? ['bounce','.55s'] :
+    sid===2 ? ['bounce','.75s'] :
+    sid<=4  ? ['bob',   '1.0s'] :
+    sid<=6  ? ['sway',  '1.8s'] :
+    sid<=8  ? ['droop', '2.4s'] :
+             ['slump', '3.0s'];
+
+  const css=`
+.hb{animation:${aN} ${aD} ease-in-out infinite;transform-origin:80px 98px}
+.tl{animation:tf 2s .2s ease-in infinite}
+.tr{animation:tf 2s 1.0s ease-in infinite}
+@keyframes bounce{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-11px) rotate(2deg)}}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+@keyframes sway{0%,100%{transform:rotate(0)}50%{transform:rotate(-2deg)}}
+@keyframes droop{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+@keyframes slump{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(5px) rotate(-3deg)}}
+@keyframes tf{0%{transform:translateY(0);opacity:.9}100%{transform:translateY(54px);opacity:0}}`;
+  // ── 배경 글로우 ──
+  const bgFX={
+    1:`<circle cx="80" cy="98" r="80" fill="rgba(255,220,50,.10)"/>`,
+    2:`<circle cx="80" cy="98" r="76" fill="rgba(60,220,160,.08)"/>`,
+    9:`<circle cx="80" cy="98" r="74" fill="rgba(120,130,150,.09)"/>`,
+   10:`<circle cx="80" cy="98" r="74" fill="rgba(80,90,110,.11)"/>`,
+  }[sid]||'';
+
+  // ── 눈 빌더 ──
+  const lx=58, rx_=102, ey=80;
+
+  // 행복한 ^ω^ 눈 (초승달 모양)
+  const happyEye=(cx)=>`
+    <path d="M${cx-16} ${ey+3} Q${cx} ${ey-14} ${cx+16} ${ey+3}" stroke="${OL}" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <ellipse cx="${cx+6}" cy="${ey-5}" rx="4.5" ry="4" fill="white" opacity=".8"/>`;
+
+  // 보통 눈 (크고 반짝이는)
+  const normalEye=(cx)=>`
+    <circle cx="${cx}" cy="${ey}" r="17" fill="white" stroke="${OL}" stroke-width="2.6"/>
+    <circle cx="${cx}" cy="${ey+1}" r="13" fill="${eyeC}"/>
+    <circle cx="${cx}" cy="${ey+1}" r="8"  fill="#0a0606"/>
+    <ellipse cx="${cx+5.5}" cy="${ey-6}" rx="5" ry="4.5" fill="white" opacity=".92"/>
+    <ellipse cx="${cx-4}"   cy="${ey+4}" rx="2.5" ry="2" fill="white" opacity=".4"/>`;
+
+  // 슬픈 눈 (축 처진 눈꺼풀)
+  const sadEye=(cx)=>`
+    ${normalEye(cx)}
+    <path d="M${cx-16} ${ey-9} Q${cx+3} ${ey+4} ${cx+15} ${ey-2}" stroke="${OL}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+
+  // X 눈
+  const xEye=(cx)=>`
+    <line x1="${cx-12}" y1="${ey-12}" x2="${cx+12}" y2="${ey+12}" stroke="${OL}" stroke-width="6" stroke-linecap="round"/>
+    <line x1="${cx+12}" y1="${ey-12}" x2="${cx-12}" y2="${ey+12}" stroke="${OL}" stroke-width="6" stroke-linecap="round"/>`;
+
+  // ── 눈썹 ──
+  const browWorried=`
+    <path d="M${lx-13} ${ey-24} Q${lx}   ${ey-18} ${lx+13} ${ey-24}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M${rx_-13} ${ey-24} Q${rx_} ${ey-18} ${rx_+13} ${ey-24}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  const browSad=`
+    <path d="M${lx-13} ${ey-20} Q${lx}   ${ey-14} ${lx+13} ${ey-20}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <path d="M${rx_-13} ${ey-20} Q${rx_} ${ey-14} ${rx_+13} ${ey-20}" stroke="${OL}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+
+  // ── 입 ──
+  const my=122;
+  const mouths={
+    grin:    `<path d="M58 ${my} Q80 ${my+20} 102 ${my}" stroke="${OL}" stroke-width="3" stroke-linecap="round" fill="rgba(200,60,80,.55)"/>
+              <path d="M62 ${my+5} Q80 ${my+18} 98 ${my+5}" fill="rgba(200,60,80,.45)"/>`,
+    smile:   `<path d="M62 ${my} Q80 ${my+14} 98 ${my}" stroke="${OL}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+    slight:  `<path d="M68 ${my} Q80 ${my+8}  92 ${my}" stroke="${OL}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
+    neutral: `<path d="M68 ${my+4} L92 ${my+4}" stroke="${OL}" stroke-width="2.4" stroke-linecap="round"/>`,
+    frown_s: `<path d="M68 ${my+8} Q80 ${my+2} 92 ${my+8}" stroke="${OL}" stroke-width="2.4" fill="none" stroke-linecap="round"/>`,
+    frown:   `<path d="M62 ${my+10} Q80 ${my+2} 98 ${my+10}" stroke="${OL}" stroke-width="2.6" fill="none" stroke-linecap="round"/>`,
+    frown_b: `<path d="M55 ${my+13} Q80 ${my}  105 ${my+13}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>`,
+  };
+
+  // ── 홍조 ──
+  const cheekBig  =`<ellipse cx="40" cy="104" rx="18" ry="11" fill="rgba(255,110,90,.22)"/><ellipse cx="120" cy="104" rx="18" ry="11" fill="rgba(255,110,90,.22)"/>`;
+  const cheekLight=`<ellipse cx="42" cy="106" rx="14" ry="9"  fill="rgba(255,110,90,.14)"/><ellipse cx="118" cy="106" rx="14" ry="9"  fill="rgba(255,110,90,.14)"/>`;
+
+  // ── 눈물 ──
+  const tearsEl=`
+    <ellipse class="tl" cx="40"  cy="96" rx="5.5" ry="8" fill="rgba(100,170,255,.88)"/>
+    <ellipse class="tr" cx="120" cy="96" rx="5.5" ry="8" fill="rgba(100,170,255,.88)"/>`;
+
+  // ── 상태별 감정 조합 (공통) ──
+  let eyesEl, browEl='', mouthEl, cheekEl='', extraEl='', tearEl='';
+  if(sid===1){
+    eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
+    extraEl=`<g style="animation:bounce .55s ease-in-out infinite;transform-origin:80px 22px">
+      <path d="M60 46 L68 20 L80 40 L92 20 L100 46Z" fill="#fbbf24" stroke="#f59e0b" stroke-width="1.8" stroke-linejoin="round"/>
+      <circle cx="60" cy="46" r="3.8" fill="#ef4444"/>
+      <circle cx="80" cy="42" r="4.4" fill="#60a5fa"/>
+      <circle cx="100" cy="46" r="3.8" fill="#ef4444"/>
+    </g>
+    <text x="2" y="44" font-size="18">✨</text><text x="132" y="44" font-size="18">✨</text>
+    <text x="4" y="200" font-size="16">🎉</text><text x="126" y="200" font-size="16">🎊</text>`;
+  } else if(sid===2){
+    eyesEl=happyEye(lx)+happyEye(rx_); mouthEl=mouths.grin; cheekEl=cheekBig;
+    extraEl=`<text x="4" y="46" font-size="18">💚</text><text x="132" y="46" font-size="18">💚</text>`;
+  } else if(sid===3){
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekBig;
+  } else if(sid===4){
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.smile; cheekEl=cheekLight;
+  } else if(sid===5){
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.slight; cheekEl=cheekLight;
+  } else if(sid===6){
+    eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.neutral;
+  } else if(sid===7){
+    browEl=browWorried; eyesEl=normalEye(lx)+normalEye(rx_); mouthEl=mouths.frown_s;
+    extraEl=`<text x="4" y="56" font-size="15">💧</text>`;
+  } else if(sid===8){
+    browEl=browSad; eyesEl=sadEye(lx)+sadEye(rx_); mouthEl=mouths.frown; tearEl=tearsEl;
+  } else if(sid===9){
+    browEl=browSad; eyesEl=sadEye(lx)+sadEye(rx_); mouthEl=mouths.frown_b; tearEl=tearsEl;
+  } else {
+    eyesEl=xEye(lx)+xEye(rx_); mouthEl=mouths.frown_b; tearEl=tearsEl;
+    extraEl=`<text x="118" y="194" font-size="16">💸</text>`;
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  동물별 신체 구조
+  // ══════════════════════════════════════════════════════════
+  // 공통 몸통·팔·다리
+  const body=`
+    <ellipse cx="80" cy="164" rx="48" ry="32" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+    <ellipse cx="80" cy="166" rx="34" ry="23" fill="${bellyC}"/>`;
+  const arms=`
+    <path d="M32 148 Q16 156 16 170 Q16 182 32 184 Q50 184 52 170 Q52 158 32 148Z" fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
+    <ellipse cx="28" cy="180" rx="14" ry="9" fill="${bellyC}"/>
+    <path d="M128 148 Q144 156 144 170 Q144 182 128 184 Q110 184 108 170 Q108 158 128 148Z" fill="${mainC}" stroke="${OL}" stroke-width="2.3"/>
+    <ellipse cx="132" cy="180" rx="14" ry="9" fill="${bellyC}"/>`;
+  const legs=`
+    <ellipse cx="56"  cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="56"  cy="191" rx="16" ry="8"  fill="${bellyC}"/>
+    <ellipse cx="104" cy="192" rx="24" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="104" cy="191" rx="16" ry="8"  fill="${bellyC}"/>`;
+
+  let ears='', head='', nose='', faceOver='', whiskers='';
+
+  if(type==='dog'){
+    // 🐶 강아지 — 늘어진 귀, 큰 젖은 코
+    ears=`
+      <ellipse cx="22" cy="68" rx="20" ry="35" fill="${mainC}" stroke="${OL}" stroke-width="2.5" transform="rotate(-10 22 68)"/>
+      <ellipse cx="22" cy="68" rx="13" ry="26" fill="${bellyC}" opacity=".65" transform="rotate(-10 22 68)"/>
+      <ellipse cx="138" cy="68" rx="20" ry="35" fill="${mainC}" stroke="${OL}" stroke-width="2.5" transform="rotate(10 138 68)"/>
+      <ellipse cx="138" cy="68" rx="13" ry="26" fill="${bellyC}" opacity=".65" transform="rotate(10 138 68)"/>`;
+    head=`
+      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="106" rx="36" ry="28" fill="${bellyC}"/>`;
+    nose=`
+      <ellipse cx="80" cy="112" rx="11" ry="9" fill="${OL}"/>
+      <ellipse cx="80" cy="110" rx="6"  ry="3.8" fill="rgba(255,255,255,.18)"/>`;
+    faceOver=`
+      <circle cx="54" cy="65" r="4.5" fill="${mainC}" opacity=".75" stroke="${OL}" stroke-width="1.2"/>
+      <circle cx="106" cy="65" r="4.5" fill="${mainC}" opacity=".75" stroke="${OL}" stroke-width="1.2"/>`;
+
+  } else if(type==='hamster'){
+    // 🐹 햄스터 — 작은 둥근 귀, 통통한 볼 주머니
+    ears=`
+      <circle cx="52" cy="38" r="20" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+      <circle cx="52" cy="38" r="12" fill="${PINK}"/>
+      <circle cx="108" cy="38" r="20" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+      <circle cx="108" cy="38" r="12" fill="${PINK}"/>`;
+    // 볼 주머니 (귀 뒤에 위치)
+    faceOver=`
+      <ellipse cx="16" cy="106" rx="26" ry="22" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+      <ellipse cx="16" cy="108" rx="18" ry="15" fill="${bellyC}"/>
+      <ellipse cx="144" cy="106" rx="26" ry="22" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+      <ellipse cx="144" cy="108" rx="18" ry="15" fill="${bellyC}"/>`;
+    head=`
+      <ellipse cx="80" cy="90" rx="66" ry="60" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="106" rx="30" ry="24" fill="${bellyC}"/>`;
+    nose=`
+      <ellipse cx="80" cy="110" rx="5.5" ry="4.5" fill="#e06070" stroke="${OL}" stroke-width="1.2"/>
+      <ellipse cx="80" cy="109" rx="2.8" ry="2"   fill="rgba(255,255,255,.3)"/>`;
+
+  } else if(type==='horse'){
+    // 🐴 말 — 긴 귀, 갈기, 큰 콧구멍
+    ears=`
+      <path d="M48 54 L52 6 L74 46Z" fill="${mainC}" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M52 52 L56 12 L72 46Z" fill="${PINK}"/>
+      <path d="M112 54 L108 6 L86 46Z" fill="${mainC}" stroke="${OL}" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M108 52 L104 12 L88 46Z" fill="${PINK}"/>`;
+    // 갈기
+    faceOver=`
+      <path d="M48 38 Q58 8 80 4 Q102 8 112 38 Q100 16 80 12 Q60 16 48 38Z" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
+      <path d="M54 36 Q62 14 80 10 Q98 14 106 36 Q96 20 80 16 Q64 20 54 36Z" fill="${bellyC}" opacity=".4"/>`;
+    head=`
+      <circle cx="80" cy="84" r="60" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="106" rx="34" ry="28" fill="${bellyC}"/>`;
+    // 콧구멍 2개
+    nose=`
+      <ellipse cx="72" cy="116" rx="9" ry="7.5" fill="${OL}" opacity=".55"/>
+      <ellipse cx="88" cy="116" rx="9" ry="7.5" fill="${OL}" opacity=".55"/>
+      <ellipse cx="72" cy="115" rx="5" ry="4"   fill="rgba(255,255,255,.2)"/>
+      <ellipse cx="88" cy="115" rx="5" ry="4"   fill="rgba(255,255,255,.2)"/>`;
+
+  } else if(type==='fox'){
+    // 🦊 여우 — 아주 큰 뾰족 귀, 눈 주변 마스크, 뺨 흰 패치
+    ears=`
+      <path d="M14 68 L32 4 L74 50Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M22 66 L36 10 L70 50Z" fill="${PINK}"/>
+      <path d="M146 68 L128 4 L86 50Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M138 66 L124 10 L90 50Z" fill="${PINK}"/>`;
+    head=`
+      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="104" rx="34" ry="28" fill="${bellyC}"/>`;
+    faceOver=`
+      <ellipse cx="56" cy="80" rx="22" ry="18" fill="${OL}" opacity=".16"/>
+      <ellipse cx="104" cy="80" rx="22" ry="18" fill="${OL}" opacity=".16"/>
+      <ellipse cx="44" cy="108" rx="18" ry="24" fill="${bellyC}" opacity=".88"/>
+      <ellipse cx="116" cy="108" rx="18" ry="24" fill="${bellyC}" opacity=".88"/>`;
+    nose=`
+      <ellipse cx="80" cy="108" rx="7.5" ry="6" fill="${OL}"/>
+      <ellipse cx="80" cy="107" rx="4"   ry="2.5" fill="rgba(255,255,255,.15)"/>`;
+    whiskers=sid<=6
+      ?`<line x1="8"  y1="108" x2="52" y2="114" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
+        <line x1="8"  y1="118" x2="50" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>
+        <line x1="108" y1="114" x2="152" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".5"/>
+        <line x1="110" y1="118" x2="152" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".4"/>`
+      :`<line x1="8"  y1="110" x2="50" y2="115" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>
+        <line x1="110" y1="115" x2="152" y2="110" stroke="${OL}" stroke-width="1.5" stroke-linecap="round" opacity=".28"/>`;
+
+  } else {
+    // 🐱 고양이 (기본)
+    ears=`
+      <path d="M20 72 L40 10 L78 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M28 70 L45 18 L73 54Z" fill="${PINK}"/>
+      <path d="M140 72 L120 10 L82 54Z" fill="${mainC}" stroke="${OL}" stroke-width="2.6" stroke-linejoin="round"/>
+      <path d="M132 70 L115 18 L87 54Z" fill="${PINK}"/>`;
+    head=`
+      <circle cx="80" cy="88" r="62" fill="${mainC}" stroke="${OL}" stroke-width="2.8"/>
+      <ellipse cx="80" cy="104" rx="36" ry="30" fill="${bellyC}"/>`;
+    nose=`
+      <ellipse cx="80" cy="108" rx="7.5" ry="5.8" fill="#e88a9a" stroke="${OL}" stroke-width="1.3"/>
+      <ellipse cx="80" cy="107" rx="3.8" ry="2.2" fill="rgba(255,255,255,.3)"/>`;
+    whiskers=sid<=6
+      ?`<line x1="10"  y1="108" x2="55" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+        <line x1="10"  y1="118" x2="53" y2="119" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
+        <line x1="105" y1="115" x2="150" y2="108" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
+        <line x1="107" y1="119" x2="150" y2="118" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>`
+      :`<line x1="10"  y1="110" x2="53" y2="115" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>
+        <line x1="107" y1="115" x2="150" y2="110" stroke="${OL}" stroke-width="1.6" stroke-linecap="round" opacity=".3"/>`;
+  }
+
+  return `<svg viewBox="0 0 160 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs><style>${css}</style></defs>
+  ${bgFX}
+  <g class="hb">
+    ${body}${arms}${legs}
+    ${faceOver && type==='hamster' ? faceOver : ''}
+    ${ears}
+    ${head}
+    ${faceOver && type!=='hamster' ? faceOver : ''}
+    ${browEl}
+    ${eyesEl}
+    ${nose}
+    ${whiskers}
+    ${mouthEl}
+    ${cheekEl}
+    ${tearEl}
+  </g>
+  ${extraEl}
+</svg>`;
+}
+
+
+
+
+// ═══════════════════════════════════════════════════════════════
+//  CHARACTER UPDATE
+// ═══════════════════════════════════════════════════════════════
+function showEmojiState(sid){
+  const stage=document.getElementById('emojiStage');
+  const thumb=document.getElementById('photoThumb');
+  const svg=emojiCache[sid]||buildEmoji(sid,null);
+  stage.innerHTML=svg;
+  stage.appendChild(thumb);
+}
+function renderStateDots(activeId){
+  const wrap=document.getElementById('stateDots'); wrap.innerHTML='';
+  STATES.forEach(s=>{
+    const d=document.createElement('div');
+    d.className='state-dot'+(s.id===activeId?' active':'');
+    d.style.background=s.bg+'55';
+    d.style.borderColor=s.id===activeId?s.bg:'rgba(255,255,255,.6)';
+    d.textContent=s.emoji;
+    d.title=`${s.minPct}%+ | ${s.label}`;
+    wrap.appendChild(d);
+  });
+}
+function setCharAura(mood){
+  const el=document.getElementById('charAura');
+  el.className='char-aura';
+  if(mood==='happy') el.classList.add('aura-happy');
+  else if(mood==='sad') el.classList.add('aura-sad');
+  else el.classList.add('aura-none');
+}
+function updateCharacter(pct,isFirst){
+  const card=document.getElementById('charCard');
+  const label=document.getElementById('charLabel');
+  const message=document.getElementById('charMessage');
+  const badge=document.getElementById('deltaBadge');
+  const parts=document.getElementById('charParticles');
+  parts.innerHTML='';
+
+  if(data.goal===0||(data.currentBase===0&&data.records.length===0)){
+    card.className='glass char-card neutral-bg'; setCharAura('none');
+    label.className='char-status-label neutral'; label.textContent='저축을 시작해보세요!';
+    message.className='char-message neutral'; message.textContent='목표를 설정하고 첫 수입을 기록해봐요 ✨';
+    badge.style.display='none'; showEmojiState(5); renderStateDots(5);
+    updateProgressRunner(pct); // ← early return 전에 반드시 호출
+    return;
+  }
+  const delta=pct-prevPct;
+  const isUp=delta>0.001, isDn=delta<-0.001;
+  const state=getState(pct);
+  showEmojiState(state.id); renderStateDots(state.id);
+
+  if(isUp){
+    card.className='glass char-card happy-bg'; setCharAura('happy');
+    label.className='char-status-label happy'; label.textContent='달성률 상승! 🎉';
+    message.className='char-message happy';
+    message.textContent=HAPPY_MSGS[Math.floor(Math.random()*HAPPY_MSGS.length)];
+    spawnFX(parts,state.id);
+    badge.style.display='inline-flex'; badge.className='delta-badge up';
+    badge.textContent=`▲ ${Math.abs(delta).toFixed(1)}% 상승`;
+  } else if(isDn){
+    card.className='glass char-card sad-bg'; setCharAura('sad');
+    label.className='char-status-label sad'; label.textContent='달성률 하락... 😢';
+    message.className='char-message sad';
+    message.textContent=SAD_MSGS[Math.floor(Math.random()*SAD_MSGS.length)];
+    spawnFX(parts,state.id);
+    badge.style.display='inline-flex'; badge.className='delta-badge down';
+    badge.textContent=`▼ ${Math.abs(delta).toFixed(1)}% 하락`;
+  } else {
+    card.className='glass char-card neutral-bg'; setCharAura('none');
+    label.className='char-status-label neutral';
+    label.textContent=pct>=100?'🏆 목표 달성!':`${state.emoji} ${state.label}`;
+    message.className='char-message neutral'; message.textContent=state.msg;
+    badge.style.display='none';
+  }
+  if(!isFirst){ prevPct=pct; localStorage.setItem(uk('prevPct'),prevPct); }
+  updateProgressRunner(pct);
+}
+
+// ── 달성률 게이지 동물 러너 — 좌우 순찰 ──
+let _prX=0, _prDir=1, _prMax=0, _prSpd=1, _prTimer=null;
+
+function _patrolStep(){
+  _prX += _prSpd * _prDir;
+  if(_prX >= _prMax){ _prX = _prMax; _prDir = -1; }
+  if(_prX <= 0)     { _prX = 0;      _prDir =  1; }
+  const el = document.getElementById('progressRunner');
+  if(el) el.style.left = Math.round(_prX) + 'px';
+}
+
+function stopPatrol(){
+  if(_prTimer){ clearInterval(_prTimer); _prTimer = null; }
+}
+
+function updateProgressRunner(pct){
+  const runner = document.getElementById('progressRunner');
+  const fill   = document.getElementById('progressFill');
+  if(!runner || !fill) return;
+
+  const barEl = fill.parentElement;
+  let barW = barEl.offsetWidth || barEl.getBoundingClientRect().width;
+  if(!barW){ requestAnimationFrame(()=>updateProgressRunner(pct)); return; }
+
+  const clamp = Math.min(100, Math.max(0, pct));
+  _prPct = clamp;
+  // 순찰 끝점 = 달성률에 비례한 fill 끝
+  _prMax = (clamp / 100) * barW;
+  // 달성률별 속도 (px/frame, 60fps 기준)
+  _prSpd = clamp>=100?3.2 : clamp>=80?2.6 : clamp>=60?2.0 : clamp>=40?1.4 : clamp>=20?0.9 : 0.5;
+  // 순찰 범위 초기화 (범위가 줄면 현재 위치 클램프)
+  if(_prX > _prMax) _prX = _prMax;
+
+  // 표정 상태
+  const sid = clamp>=100?1:clamp>=80?2:clamp>=60?3:clamp>=40?4:clamp>=20?5:clamp>=1?6:7;
+
+  // 러너 크기 (달성률 높을수록 조금 더 크게)
+  const sz = 46 + Math.floor(clamp/100*16);
+  runner.style.width  = sz+'px';
+  runner.style.height = (sz+28)+'px';
+  runner.style.transition = 'none'; // rAF이 직접 제어하므로 CSS transition 제거
+
+  // SVG 업데이트
+  const svg = buildRunnerSVG(sid);
+  runner.innerHTML = svg+'<span class="progress-flag" id="progressFlag"'
+    +(clamp>=100?' style="display:inline"':'')+'>🚩</span>';
+
+  // 순찰 루프 시작/재시작 (setInterval — 백그라운드 탭에서도 동작)
+  if(!_prTimer) _prTimer = setInterval(_patrolStep, 16); // ~60fps
+}
+
+// 러너 전용 SVG — 몸통 + 달리는 다리 포함
+function buildRunnerSVG(sid){
+  const type   = animalType || 'cat';
+  const def    = ANIMAL_DEF[type] || ANIMAL_DEF.cat;
+  const mainC  = personColors?.hair  || def.main;
+  const bellyC = personColors?.skin  || def.belly;
+  const eyeC   = personColors?.eye   || def.eye;
+  const OL = '#1a1209';
+  const PINK = '#f4a8b8';
+
+  // 달성률별 달리기 속도 & 다리 흔들림 각도
+  const spd = sid===1?'.26s':sid===2?'.36s':sid<=4?'.52s':sid<=6?'.82s':'1.5s';
+  const ang = sid<=2?32:sid<=4?26:sid<=6?18:11;
+
+  const css=`
+.rb{animation:rBob ${spd} ease-in-out infinite;transform-origin:50px 52px}
+.ll{animation:legL ${spd} ease-in-out infinite;transform-origin:40px 80px}
+.rl{animation:legR ${spd} ease-in-out infinite;transform-origin:60px 80px}
+.la{animation:legR ${spd} ease-in-out infinite;transform-origin:34px 68px}
+.ra{animation:legL ${spd} ease-in-out infinite;transform-origin:66px 68px}
+@keyframes rBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes legL{0%,100%{transform:rotate(${-ang}deg)}50%{transform:rotate(${ang}deg)}}
+@keyframes legR{0%,100%{transform:rotate(${ang}deg)}50%{transform:rotate(${-ang}deg)}}`;
+
+  // 표정 — 눈
+  const ey=32;
+  const eyeSVG = sid<=2
+    ? `<path d="M27 ${ey+1} Q34 ${ey-9} 41 ${ey+1}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+       <ellipse cx="33" cy="${ey-5}" rx="2.8" ry="2.4" fill="white" opacity=".7"/>
+       <path d="M59 ${ey+1} Q66 ${ey-9} 73 ${ey+1}" stroke="${OL}" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+       <ellipse cx="65" cy="${ey-5}" rx="2.8" ry="2.4" fill="white" opacity=".7"/>`
+    : sid>=9
+    ? `<line x1="27" y1="${ey-6}" x2="41" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>
+       <line x1="41" y1="${ey-6}" x2="27" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>
+       <line x1="59" y1="${ey-6}" x2="73" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>
+       <line x1="73" y1="${ey-6}" x2="59" y2="${ey+6}" stroke="${OL}" stroke-width="3.5" stroke-linecap="round"/>`
+    : `<circle cx="34" cy="${ey}" r="8" fill="white" stroke="${OL}" stroke-width="1.8"/>
+       <circle cx="34" cy="${ey+1}" r="5.5" fill="${eyeC}"/>
+       <circle cx="34" cy="${ey+1}" r="3.2" fill="#0a0606"/>
+       <ellipse cx="37" cy="${ey-3}" rx="2.5" ry="2.2" fill="white" opacity=".92"/>
+       <circle cx="66" cy="${ey}" r="8" fill="white" stroke="${OL}" stroke-width="1.8"/>
+       <circle cx="66" cy="${ey+1}" r="5.5" fill="${eyeC}"/>
+       <circle cx="66" cy="${ey+1}" r="3.2" fill="#0a0606"/>
+       <ellipse cx="69" cy="${ey-3}" rx="2.5" ry="2.2" fill="white" opacity=".92"/>`;
+
+  // 표정 — 입
+  const mouthSVG = sid<=4
+    ? `<path d="M37 50 Q50 58 63 50" stroke="${OL}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`
+    : sid<=7
+    ? `<path d="M40 52 L60 52" stroke="${OL}" stroke-width="2" stroke-linecap="round"/>`
+    : `<path d="M37 54 Q50 48 63 54" stroke="${OL}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+
+  // 홍조
+  const blush = sid<=4
+    ? `<ellipse cx="22" cy="43" rx="7.5" ry="5" fill="rgba(255,110,90,.22)"/>
+       <ellipse cx="78" cy="43" rx="7.5" ry="5" fill="rgba(255,110,90,.22)"/>` : '';
+
+  // 동물별 귀
+  let ears='';
+  if(type==='cat'){
+    ears=`<path d="M20 18 L25 0 L43 14Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M23 16 L27 4 L41 14Z" fill="${PINK}"/>
+          <path d="M80 18 L75 0 L57 14Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M77 16 L73 4 L59 14Z" fill="${PINK}"/>`;
+  } else if(type==='fox'){
+    ears=`<path d="M15 20 L21 0 L43 12Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M19 18 L24 3 L41 12Z" fill="${PINK}"/>
+          <path d="M85 20 L79 0 L57 12Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M81 18 L76 3 L59 12Z" fill="${PINK}"/>`;
+  } else if(type==='dog'){
+    ears=`<ellipse cx="16" cy="28" rx="12" ry="19" fill="${mainC}" stroke="${OL}" stroke-width="2" transform="rotate(-8 16 28)"/>
+          <ellipse cx="16" cy="28" rx="7" ry="12" fill="${bellyC}" opacity=".6" transform="rotate(-8 16 28)"/>
+          <ellipse cx="84" cy="28" rx="12" ry="19" fill="${mainC}" stroke="${OL}" stroke-width="2" transform="rotate(8 84 28)"/>
+          <ellipse cx="84" cy="28" rx="7" ry="12" fill="${bellyC}" opacity=".6" transform="rotate(8 84 28)"/>`;
+  } else if(type==='hamster'){
+    ears=`<circle cx="26" cy="12" r="13" fill="${mainC}" stroke="${OL}" stroke-width="2"/>
+          <circle cx="26" cy="12" r="8" fill="${PINK}"/>
+          <circle cx="74" cy="12" r="13" fill="${mainC}" stroke="${OL}" stroke-width="2"/>
+          <circle cx="74" cy="12" r="8" fill="${PINK}"/>`;
+  } else if(type==='horse'){
+    ears=`<path d="M26 20 L30 0 L48 16Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M28 18 L32 4 L46 16Z" fill="${PINK}"/>
+          <path d="M74 20 L70 0 L52 16Z" fill="${mainC}" stroke="${OL}" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M72 18 L68 4 L54 16Z" fill="${PINK}"/>
+          <path d="M28 12 Q50 4 72 12 Q62 0 50 -2 Q38 0 28 12Z" fill="${mainC}" stroke="${OL}" stroke-width="1.5"/>`;
+  }
+
+  return `<svg viewBox="0 0 100 110" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs><style>${css}</style></defs>
+  <g class="rb">
+    <!-- 팔 (달리기 반대 방향으로 흔들림) -->
+    <g class="la">
+      <path d="M34 68 Q26 76 22 84" stroke="${mainC}" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse cx="21" cy="85" rx="7" ry="4.5" fill="${mainC}" stroke="${OL}" stroke-width="1.5"/>
+    </g>
+    <g class="ra">
+      <path d="M66 68 Q74 76 78 84" stroke="${mainC}" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <ellipse cx="79" cy="85" rx="7" ry="4.5" fill="${mainC}" stroke="${OL}" stroke-width="1.5"/>
+    </g>
+    <!-- 몸통 -->
+    <ellipse cx="50" cy="72" rx="18" ry="13" fill="${mainC}" stroke="${OL}" stroke-width="2.2"/>
+    <ellipse cx="50" cy="74" rx="12" ry="9" fill="${bellyC}"/>
+    <!-- 귀 -->
+    ${ears}
+    <!-- 머리 -->
+    <circle cx="50" cy="34" r="28" fill="${mainC}" stroke="${OL}" stroke-width="2.5"/>
+    <ellipse cx="50" cy="44" rx="17" ry="14" fill="${bellyC}"/>
+    <!-- 표정 -->
+    ${eyeSVG}
+    <ellipse cx="50" cy="50" rx="5" ry="4" fill="${type==='dog'?OL:'#e88a9a'}"/>
+    ${mouthSVG}
+    ${blush}
+    <!-- 다리 — 반대 방향으로 교대 스윙 (달리기) -->
+    <g class="ll">
+      <path d="M40 80 Q32 93 29 106" stroke="${mainC}" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <ellipse cx="28" cy="107" rx="9" ry="5" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
+      <ellipse cx="28" cy="106" rx="5.5" ry="3" fill="${bellyC}"/>
+    </g>
+    <g class="rl">
+      <path d="M60 80 Q68 93 71 106" stroke="${mainC}" stroke-width="9" fill="none" stroke-linecap="round"/>
+      <ellipse cx="72" cy="107" rx="9" ry="5" fill="${mainC}" stroke="${OL}" stroke-width="1.8"/>
+      <ellipse cx="72" cy="106" rx="5.5" ry="3" fill="${bellyC}"/>
+    </g>
+  </g>
+</svg>`;
+}
+
+function spawnFX(container, sid){
+  container.style.cssText='position:absolute;inset:0;pointer-events:none;overflow:hidden;border-radius:24px;';
+  if(sid<=4){ // happy
+    const icons=sid===1?['🎉','✨','💰','🌟','⭐','💎']:sid===2?['✨','💚','⭐','🌟']:['✨','💚','🌿'];
+    icons.forEach((e,i)=>{
+      const el=document.createElement('div'); el.className='particle'; el.textContent=e;
+      el.style.cssText=`left:${12+i*(76/icons.length)}%;bottom:${6+Math.random()*20}px;animation-delay:${i*.28}s;animation-duration:${2.1+Math.random()*1.1}s;font-size:${1.1+Math.random()*.6}rem;`;
+      container.appendChild(el);
+    });
+    // glow orb
+    const g=document.createElement('div');
+    g.style.cssText='position:absolute;width:180px;height:180px;border-radius:50%;background:radial-gradient(circle,rgba(255,215,0,.12),transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);animation:auraPulse 2.2s ease-in-out infinite alternate;pointer-events:none;';
+    container.appendChild(g);
+  } else {
+    for(let i=0;i<18;i++){
+      const el=document.createElement('div'); el.className='rain-drop';
+      const h=10+Math.random()*10;
+      el.style.cssText=`left:${Math.random()*100}%;top:-24px;height:${h}px;animation-delay:${Math.random()*1.8}s;animation-duration:${.75+Math.random()*.55}s;`;
+      container.appendChild(el);
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TITLE ICON PICKER
+// ═══════════════════════════════════════════════════════════════
+const TITLE_ICONS=['💰','💵','💴','💶','💷','💸','🏦','💳','💹','📈','📊','🎯','🏆','🥇','🎖️','🌟','✨','⭐','💎','💡','🚀','💪','🌈','🎪'];
+function toggleIconPicker(){
+  const panel=document.getElementById('iconPanel');
+  if(panel.style.display==='none'){
+    panel.innerHTML=TITLE_ICONS.map(ic=>`<button class="icon-opt${ic===selectedIcon?' sel':''}" onclick="selectIcon('${ic}')">${ic}</button>`).join('');
+    panel.style.display='grid';
+    setTimeout(()=>document.addEventListener('click',closeIconPicker,{once:true}),0);
+  } else { panel.style.display='none'; }
+}
+function closeIconPicker(e){
+  const panel=document.getElementById('iconPanel'),trigger=document.getElementById('iconTrigger');
+  if(!panel.contains(e.target)&&e.target!==trigger) panel.style.display='none';
+}
+function selectIcon(ic){
+  selectedIcon=ic; localStorage.setItem(uk('titleIcon'),ic);
+  document.getElementById('iconTrigger').textContent=ic;
+  document.getElementById('iconPanel').style.display='none';
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+  toast(`아이콘 변경! ${ic}`,'info');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TITLE EDIT
+// ═══════════════════════════════════════════════════════════════
+function startEditTitle(){
+  const txt=document.getElementById('titleText'),inp=document.getElementById('titleInput');
+  txt.style.display='none'; inp.style.display='inline-block'; inp.value=appTitle; inp.focus(); inp.select();
+}
+function saveTitle(){
+  const inp=document.getElementById('titleInput');
+  const v=inp.value.trim()||'저축 트래커'; appTitle=v; localStorage.setItem(uk('appTitle'),v);
+  document.getElementById('titleText').textContent=v; document.title=v;
+  inp.style.display='none'; document.getElementById('titleText').style.display='inline';
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+  toast('타이틀 변경!','info');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CORE LOGIC
+// ═══════════════════════════════════════════════════════════════
+const CATEGORIES={
+  income:['근로소득','부수입','금융 수익','기타'],
+  expense:['주거/통신','식비','교통비','문화생활','기타']
+};
+function updateCategorySelect(t){
+  const sel=document.getElementById('recordCategory');
+  sel.innerHTML=CATEGORIES[t].map(c=>`<option value="${c}">${c}</option>`).join('');
+}
+function setType(t){
+  currentType=t;
+  document.getElementById('typeIncome').className =t==='income' ?'active-income':'';
+  document.getElementById('typeExpense').className=t==='expense'?'active-expense':'';
+  updateCategorySelect(t);
+}
+function setFilter(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active'); renderLog();
+}
+function setView(v){
+  currentView=v;
+  document.getElementById('btnList').classList.toggle('active',v==='list');
+  document.getElementById('btnCal').classList.toggle('active', v==='cal');
+  document.getElementById('filterBtns').style.display=v==='list'?'flex':'none';
+  document.getElementById('logList').style.display =v==='list'?'flex':'none';
+  document.getElementById('calView').style.display  =v==='cal' ?'block':'none';
+  if(v==='cal') renderCalendar();
+}
+function setCurrentBase(){
+  const v=parseFloat(document.getElementById('currentBaseInput').value);
+  if(isNaN(v)||v<0){toast('올바른 보유 금액을 입력하세요.','error');return;}
+  data.currentBase=v; save(); render();
+  document.getElementById('currentBaseInput').value='';
+  toast(`현재 보유 ${fmt(v)} 설정!`,'info');
+}
+function setGoal(){
+  const v=parseFloat(document.getElementById('goalInput').value);
+  if(!v||v<=0){toast('올바른 목표 금액을 입력하세요.','error');return;}
+  data.goal=v; save(); render();
+  document.getElementById('goalInput').value='';
+  toast('목표 금액 설정!','info');
+}
+function addRecord(){
+  const date=document.getElementById('recordDate').value;
+  const desc=document.getElementById('recordDesc').value.trim();
+  const amount=parseFloat(document.getElementById('recordAmount').value);
+  if(!date){toast('날짜를 선택하세요.','error');return;}
+  if(!desc){toast('내용을 입력하세요.','error');return;}
+  if(!amount||amount<=0){toast('올바른 금액을 입력하세요.','error');return;}
+  const category=document.getElementById('recordCategory').value||'기타';
+  data.records.unshift({id:Date.now(),date,desc,amount,type:currentType,category});
+  save(); render();
+  document.getElementById('recordDesc').value='';
+  document.getElementById('recordAmount').value='';
+  toast(currentType==='income'?`수입 ${fmt(amount)} 기록! 💚`:`지출 ${fmt(amount)} 기록! 🔴`,
+        currentType==='income'?'success':'error');
+}
+function deleteRecord(id){ data.records=data.records.filter(r=>r.id!==id); save(); render(); toast('내역 삭제','info'); }
+function clearForm(){
+  document.getElementById('recordDesc').value='';
+  document.getElementById('recordAmount').value='';
+  document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
+  setType('income');
+  updateCategorySelect('income');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════
+function render(isFirst){
+  const ti=data.records.filter(r=>r.type==='income').reduce((s,r)=>s+r.amount,0);
+  const te=data.records.filter(r=>r.type==='expense').reduce((s,r)=>s+r.amount,0);
+  const net=ti-te, tc=data.currentBase+net, goal=data.goal;
+  const pct=goal>0?Math.min(100,(tc/goal)*100):0;
+  document.getElementById('goalDisplay').textContent   =fmt(goal);
+  document.getElementById('currentDisplay').textContent=fmt(tc<0?0:tc);
+  document.getElementById('baseDisplay').textContent   =fmt(data.currentBase);
+  document.getElementById('totalIncome').textContent   =fmt(ti);
+  document.getElementById('totalExpense').textContent  =fmt(te);
+  document.getElementById('netSaving').textContent     =(tc<0?'-':'')+fmt(tc);
+  document.getElementById('progressFill').style.width  =pct+'%';
+  document.getElementById('progressPct').textContent   =pct.toFixed(1)+'%';
+  const rem=goal-(tc<0?0:tc);
+  document.getElementById('remainDisplay').textContent=rem>0?`남은 금액: ${fmt(rem)}`:'🎉 목표 달성!';
+  updateCharacter(pct,isFirst);
+  renderWeeklyBudget();
+  renderLog();
+  if(currentView==='cal') renderCalendar();
+}
+
+// ─── LIST LOG ───
+function renderLog(){
+  const list=document.getElementById('logList');
+  const recs=currentFilter==='all'?data.records:data.records.filter(r=>r.type===currentFilter);
+  if(!recs.length){
+    list.innerHTML=`<div class="empty-state"><div class="icon">${currentFilter==='income'?'💚':currentFilter==='expense'?'🔴':'📂'}</div><div>기록이 없습니다.</div></div>`;return;
+  }
+  const g={}; recs.forEach(r=>{(g[r.date]=g[r.date]||[]).push(r);});
+  const sorted=Object.keys(g).sort((a,b)=>b.localeCompare(a));
+  list.innerHTML='';
+  sorted.forEach(date=>{
+    const dh=document.createElement('div'); dh.className='day-group'; dh.textContent=fmtDate(date); list.appendChild(dh);
+    g[date].forEach(r=>{
+      const el=document.createElement('div'); el.className='log-item';
+      el.innerHTML=`<div class="log-icon ${r.type}">${r.type==='income'?'💚':'🔴'}</div>
+        <div class="log-info">
+          <div class="log-desc">${escHtml(r.desc)}</div>
+          ${r.category?`<span class="log-cat ${r.type}">${r.category}</span>`:''}
+        </div>
+        <div class="log-amount ${r.type}">${r.type==='income'?'+':'-'}${fmt(r.amount)}</div>
+        <button class="log-del" onclick="deleteRecord(${r.id})">✕</button>`;
+      list.appendChild(el);
+    });
+  });
+}
+
+// ─── CALENDAR ───
+function renderCalendar(){
+  const now=new Date();
+  if(calYear===undefined){calYear=now.getFullYear();calMonth=now.getMonth();}
+  const todayStr=now.toISOString().split('T')[0];
+  const wrap=document.getElementById('calView');
+  const dayMap={};
+  data.records.forEach(r=>{
+    if(!dayMap[r.date])dayMap[r.date]={income:0,expense:0,items:[]};
+    dayMap[r.date].items.push(r);
+    if(r.type==='income')dayMap[r.date].income+=r.amount;
+    else dayMap[r.date].expense+=r.amount;
+  });
+  const firstDay=new Date(calYear,calMonth,1);
+  const lastDay =new Date(calYear,calMonth+1,0);
+  const startDow=firstDay.getDay();
+  const monthLabel=firstDay.toLocaleDateString('ko-KR',{year:'numeric',month:'long'});
+  let html=`<div class="cal-wrap">
+    <div class="cal-nav">
+      <button class="cal-nav-btn" onclick="calPrev()">◀</button>
+      <span class="cal-nav-title">${monthLabel}</span>
+      <button class="cal-nav-btn" onclick="calNext()">▶</button>
+    </div>
+    <div class="cal-grid">
+      <div class="cal-head">일</div><div class="cal-head">월</div><div class="cal-head">화</div>
+      <div class="cal-head">수</div><div class="cal-head">목</div><div class="cal-head">금</div>
+      <div class="cal-head">토</div>`;
+  for(let i=0;i<startDow;i++) html+=`<div class="cal-day other-month"></div>`;
+  for(let d=1;d<=lastDay.getDate();d++){
+    const ds=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const dd=dayMap[ds];
+    const isToday=ds===todayStr, isSel=ds===calSelectedDate, dow=new Date(calYear,calMonth,d).getDay();
+    const nc=dow===0?'color:#e11d48':dow===6?'color:#3b82f6':'';
+    let dots='',amts='';
+    if(dd){
+      if(dd.income>0)  dots+=`<div class="cal-dot income"></div>`;
+      if(dd.expense>0) dots+=`<div class="cal-dot expense"></div>`;
+      const net=dd.income-dd.expense;
+      amts=`<div class="cal-amt">`;
+      if(dd.income>0)  amts+=`<div class="ci">+${fmt(dd.income)}</div>`;
+      if(dd.expense>0) amts+=`<div class="ce">-${fmt(dd.expense)}</div>`;
+      amts+=`<div class="ct" style="color:${net>=0?'#6366f1':'#e11d48'}">${net>=0?'+':''}${fmt(net)}</div></div>`;
+    }
+    html+=`<div class="cal-day${isToday?' today':''}${dd?' has-data':''}${isSel?' selected':''}" onclick="${dd?`showDayDetail('${ds}')`:''}" >
+      <div class="cal-day-num" style="${nc}">${d}</div>
+      <div class="cal-dots">${dots}</div>${amts}
+    </div>`;
+  }
+  const endDow=lastDay.getDay();
+  for(let i=endDow+1;i<7;i++) html+=`<div class="cal-day other-month"></div>`;
+  html+=`</div>`;// cal-grid
+  if(calSelectedDate&&dayMap[calSelectedDate]){
+    const dd=dayMap[calSelectedDate], net=dd.income-dd.expense;
+    html+=`<div class="day-detail">
+      <div class="day-detail-header">
+        <div class="day-detail-title">📅 ${fmtDate(calSelectedDate)}</div>
+        <div class="day-detail-summary">
+          <span class="ds-i">수입 +${fmt(dd.income)}</span>
+          <span class="ds-e">지출 -${fmt(dd.expense)}</span>
+          <span class="ds-t">총계 ${net>=0?'+':''}${fmt(net)}</span>
+        </div>
+      </div>
+      <div class="day-detail-items">`;
+    dd.items.forEach(r=>{
+      html+=`<div class="day-detail-item">
+        <div class="dd-icon ${r.type}">${r.type==='income'?'💚':'🔴'}</div>
+        <div class="dd-desc">${escHtml(r.desc)}</div>
+        <div class="dd-amt ${r.type}">${r.type==='income'?'+':'-'}${fmt(r.amount)}</div>
+        <button class="dd-del" onclick="deleteRecord(${r.id});calSelectedDate=null;renderCalendar()">✕</button>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  }
+  html+=`</div>`;
+  wrap.innerHTML=html;
+}
+function showDayDetail(ds){calSelectedDate=calSelectedDate===ds?null:ds;renderCalendar();}
+function calPrev(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}calSelectedDate=null;renderCalendar();}
+function calNext(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}calSelectedDate=null;renderCalendar();}
+
+// ═══════════════════════════════════════════════════════════════
+//  RECURRING PAYMENTS
+// ═══════════════════════════════════════════════════════════════
+let recurringData = JSON.parse(localStorage.getItem('recurringData') || '[]');
+let recCycle = 'monthly';
+
+function saveRec(){
+  localStorage.setItem(uk('recurringData'), JSON.stringify(recurringData));
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  주간 예산 (Weekly Budget)
+// ═══════════════════════════════════════════════════════════════
+function getWeekStart(){
+  const now = new Date();
+  const day = now.getDay(); // 0=일, 1=월 ... 6=토
+  const diff = (day === 0) ? 6 : day - 1; // 월요일 기준
+  const mon = new Date(now);
+  mon.setDate(now.getDate() - diff);
+  mon.setHours(0,0,0,0);
+  return mon;
+}
+
+function getWeeklyExpenses(){
+  const weekStart = getWeekStart();
+  return data.records
+    .filter(r => r.type === 'expense' && new Date(r.date) >= weekStart)
+    .reduce((s,r) => s + r.amount, 0);
+}
+
+function getDaysLeftInWeek(){
+  const now  = new Date();
+  const day  = now.getDay();
+  const sun  = new Date(now);
+  sun.setDate(now.getDate() + (day === 0 ? 0 : 7 - day));
+  sun.setHours(23,59,59,999);
+  return Math.ceil((sun - now) / 86400000);
+}
+
+function setWeeklyBudget(){
+  const val = parseFloat(document.getElementById('weeklyBudgetInput').value);
+  if(!val || val <= 0){ toast('올바른 금액을 입력하세요.','error'); return; }
+  weeklyBudget = val;
+  localStorage.setItem(uk('weeklyBudget'), String(weeklyBudget));
+  if(fbReady && currentUser) fbSaveUserData(currentUser);
+  renderWeeklyBudget();
+  toast('주간 예산이 설정됐어요! 💰','success');
+}
+
+function resetWeeklyBudget(){
+  document.getElementById('wbSetupArea').style.display = '';
+  document.getElementById('wbContentArea').style.display = 'none';
+  document.getElementById('weeklyBudgetInput').value = weeklyBudget > 0 ? weeklyBudget : '';
+}
+
+function renderWeeklyBudget(){
+  if(!currentUser) return;
+  const daysLeft = getDaysLeftInWeek();
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const now = new Date();
+  document.getElementById('wbDaysBadge').textContent =
+    `${dayNames[now.getDay()]}요일 · ${daysLeft}일 남음`;
+
+  if(weeklyBudget <= 0){
+    document.getElementById('wbSetupArea').style.display = '';
+    document.getElementById('wbContentArea').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('wbSetupArea').style.display = 'none';
+  document.getElementById('wbContentArea').style.display = '';
+
+  const spent  = getWeeklyExpenses();
+  const remain = weeklyBudget - spent;
+  const usedPct = Math.min(100, Math.round((spent / weeklyBudget) * 100));
+
+  // 금액 표시
+  document.getElementById('wbBudgetVal').textContent = fmt(weeklyBudget);
+  document.getElementById('wbSpentVal').textContent  = fmt(spent);
+  document.getElementById('wbRemainVal').textContent = remain >= 0 ? fmt(remain) : '-'+fmt(Math.abs(remain));
+  document.getElementById('wbUsedPct').textContent   = usedPct + '% 사용';
+
+  // 남은 금액 색상
+  const rEl = document.getElementById('wbRemainVal');
+  rEl.className = 'wb-stat-value ' +
+    (remain < 0          ? 'wb-remain-over' :
+     usedPct >= 80       ? 'wb-remain-low'  : 'wb-remain-ok');
+
+  // 진행 바 색상 (초록→주황→빨강)
+  const barColor =
+    usedPct <= 50  ? `linear-gradient(90deg,#34d399,#10b981)` :
+    usedPct <= 80  ? `linear-gradient(90deg,#fbbf24,#f97316)` :
+                     `linear-gradient(90deg,#f97316,#ef4444)`;
+  const bar = document.getElementById('wbBarFill');
+  bar.style.width = usedPct + '%';
+  bar.style.background = barColor;
+
+  // 초과 경고
+  document.getElementById('wbWarn').style.display = remain < 0 ? 'block' : 'none';
+}
+
+function setRecCycle(c){
+  recCycle = c;
+  document.getElementById('recCycleMonth').className = c==='monthly'?'active':'';
+  document.getElementById('recCycleYear').className  = c==='yearly' ?'active':'';
+  populateRecDaySelect();
+}
+
+function populateRecDaySelect(){
+  const sel = document.getElementById('recDay');
+  sel.innerHTML = '';
+  if(recCycle === 'monthly'){
+    for(let d=1;d<=31;d++){
+      const o=document.createElement('option'); o.value=d; o.textContent=`매월 ${d}일`; sel.appendChild(o);
+    }
+  } else {
+    const months=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+    months.forEach((m,i)=>{
+      const o=document.createElement('option'); o.value=i+1; o.textContent=`매년 ${m}`; sel.appendChild(o);
+    });
+  }
+}
+
+const REC_ICONS = {
+  '넷플릭스':'🎬','유튜브':'▶️','스포티파이':'🎵','멜론':'🎵','왓챠':'🎞️','디즈니':'🏰',
+  '애플':'🍎','아마존':'📦','쿠팡':'🛒','카카오':'💛','네이버':'🟢','구글':'🔍',
+  '마이크로소프트':'🪟','어도비':'🎨','드롭박스':'📁','슬랙':'💬','줌':'📹',
+  '통신':'📱','인터넷':'🌐','보험':'🛡️','월세':'🏠','관리비':'🏢','헬스장':'💪',
+};
+function getRecIcon(name){
+  for(const [k,v] of Object.entries(REC_ICONS)){
+    if(name.includes(k)) return v;
+  }
+  return '🔄';
+}
+
+function addRecurring(){
+  const name   = document.getElementById('recItemName').value.trim();
+  const amount = parseFloat(document.getElementById('recAmount').value);
+  const day    = parseInt(document.getElementById('recDay').value);
+  if(!name){toast('서비스명을 입력하세요.','error');return;}
+  if(!amount||amount<=0){toast('올바른 금액을 입력하세요.','error');return;}
+  recurringData.push({id:Date.now(), name, amount, cycle:recCycle, day});
+  saveRec(); renderRecurring();
+  document.getElementById('recItemName').value='';
+  document.getElementById('recAmount').value='';
+  toast(`${name} 정기 결제 추가! ${fmt(amount)}`,'success');
+}
+
+function deleteRecurring(id){
+  recurringData = recurringData.filter(r=>r.id!==id);
+  saveRec(); renderRecurring();
+  toast('정기 결제 삭제','info');
+}
+
+function payNow(id){
+  const rec = recurringData.find(r=>r.id===id);
+  if(!rec) return;
+  const today = new Date().toISOString().split('T')[0];
+  data.records.unshift({id:Date.now(), date:today, desc:rec.name+' (정기결제)', amount:rec.amount, type:'expense', category:'주거/통신'});
+  save(); render();
+  toast(`${rec.name} ${fmt(rec.amount)} 지출 기록! 💳`,'error');
+}
+
+function getDaysUntilNext(rec){
+  const now = new Date();
+  const today = now.getDate();
+  const thisMonth = now.getMonth();
+  const thisYear = now.getFullYear();
+  if(rec.cycle==='monthly'){
+    let nextDate = new Date(thisYear, thisMonth, rec.day);
+    if(nextDate <= now) nextDate = new Date(thisYear, thisMonth+1, rec.day);
+    return Math.ceil((nextDate - now) / 86400000);
+  } else {
+    let nextDate = new Date(thisYear, rec.day-1, 1);
+    if(nextDate <= now) nextDate = new Date(thisYear+1, rec.day-1, 1);
+    return Math.ceil((nextDate - now) / 86400000);
+  }
+}
+
+function toMonthlyAmount(rec){
+  return rec.cycle==='monthly' ? rec.amount : rec.amount/12;
+}
+
+function renderRecurring(){
+  const now = new Date();
+  const thisMonth = now.getMonth(), thisYear = now.getFullYear();
+
+  // Totals
+  const monthlyTotal = recurringData.reduce((s,r)=>s+toMonthlyAmount(r),0);
+  const yearlyTotal  = recurringData.reduce((s,r)=>s+(r.cycle==='yearly'?r.amount:r.amount*12),0);
+  const remaining    = recurringData.filter(r=>{
+    if(r.cycle!=='monthly') return false;
+    const paid = data.records.some(rec=>
+      rec.type==='expense' && rec.desc.includes(r.name) &&
+      new Date(rec.date).getMonth()===thisMonth && new Date(rec.date).getFullYear()===thisYear
+    );
+    return !paid && r.day >= now.getDate();
+  }).length;
+
+  document.getElementById('recCount').textContent = recurringData.length;
+  document.getElementById('recMonthlyTotal').textContent = fmt(monthlyTotal);
+  document.getElementById('recYearlyTotal').textContent  = fmt(yearlyTotal);
+  document.getElementById('recRemainingCount').textContent = `${remaining}건`;
+
+  const list = document.getElementById('recList');
+  if(!recurringData.length){
+    list.innerHTML=`<div class="empty-state"><div class="icon">🔄</div><div>정기 결제 항목이 없습니다.</div></div>`;
+    return;
+  }
+
+  const sorted = [...recurringData].sort((a,b)=>getDaysUntilNext(a)-getDaysUntilNext(b));
+  list.innerHTML = sorted.map(r=>{
+    const days = getDaysUntilNext(r);
+    const soon = days <= 7;
+    const nextLabel = days===0?'오늘 결제!':days===1?'내일 결제!':days<=7?`${days}일 후`:days<=30?`${days}일 후`:`${days}일 후`;
+    const cycleLabel = r.cycle==='monthly'?`매월 ${r.day}일`:`매년 ${r.day}월`;
+    const cycleBadge = r.cycle==='monthly'?'monthly':'yearly';
+    return `<div class="rec-item">
+      <div class="rec-icon">${getRecIcon(r.name)}</div>
+      <div class="rec-info">
+        <div class="rec-name">${escHtml(r.name)}</div>
+        <div class="rec-meta">
+          <span class="rec-cycle-badge ${cycleBadge}">${r.cycle==='monthly'?'월간':'연간'}</span>
+          <span class="rec-day-badge">${cycleLabel}</span>
+          <span class="rec-next-badge ${soon?'soon':'ok'}">${nextLabel}</span>
+        </div>
+      </div>
+      <div class="rec-amount">${fmt(r.amount)}</div>
+      <div class="rec-actions">
+        <button class="rec-pay-btn" onclick="payNow(${r.id})">지출 기록</button>
+        <button class="rec-del-btn" onclick="deleteRecurring(${r.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function escHtml(s){return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toast(msg,type='info'){
+  const wrap=document.getElementById('toastWrap');
+  const el=document.createElement('div'); el.className=`toast ${type}`; el.textContent=msg; wrap.appendChild(el);
+  setTimeout(()=>{el.classList.add('hide');setTimeout(()=>el.remove(),300);},2500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+function initApp(){
+  emojiCache={};
+  // 동물 선택 버튼 활성화
+  document.querySelectorAll('.animal-btn').forEach(b=>{
+    const t=b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    b.classList.toggle('active', t===animalType);
+  });
+  document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
+  document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+  document.getElementById('titleText').textContent=appTitle;
+  document.getElementById('iconTrigger').textContent=selectedIcon;
+  document.title=appTitle;
+  if(photoDataURL){
+    document.getElementById('photoThumbImg').src=photoDataURL;
+    document.getElementById('photoThumb').style.display='block';
+    document.getElementById('uploadPill').style.display='none';
+  } else {
+    document.getElementById('photoThumb').style.display='none';
+    document.getElementById('uploadPill').style.display='flex';
+  }
+  if(personColors) rebuildCache();
+  render(true);
+  populateRecDaySelect();
+  renderRecurring();
+  updateCategorySelect('income');
+  renderWeeklyBudget();
+  // 창 크기 바뀔 때 러너 위치 재계산
+  window.addEventListener('resize', ()=>{
+    const pct = data.goal>0
+      ? Math.min(100,(data.currentBase + data.records.reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100)
+      : 0;
+    updateProgressRunner(pct);
+  });
+}
+
+// ── 시작 시 Firebase 초기화 + 자동 로그인 체크 ──
+(async function(){
+  document.getElementById('todayDate').textContent=
+    new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
+
+  // Firebase 초기화 (연결 테스트 포함)
+  await fbInit();
+
+  // Firebase 연결 시 — 사용자 목록 동기화 (다른 기기에서 가입한 계정도 로그인 가능)
+  if(fbReady){
+    showFbLoading('연결 중...');
+    const fbUsers = await fbGetUsers();
+    hideFbLoading();
+    if(fbUsers && Object.keys(fbUsers).length > 0){
+      const localUsers = getUsers();
+      const merged = Object.assign({}, localUsers, fbUsers);
+      saveUsers(merged);
+    }
+  }
+
+  const autoData=JSON.parse(localStorage.getItem('__autoLogin__')||'null');
+  const users=getUsers();
+
+  if(autoData && users[autoData.code]){
+    // 자동 로그인 데이터 유효 → 1단계 건너뛰고 2단계로
+    pendingCode=autoData.code;
+    const uname=users[autoData.code].name||'';
+    document.getElementById('loginSubText').textContent=
+      (uname?uname+'님, ':'')+'4자리 인증번호를 입력하세요';
+    showView('viewLogin');
+  } else {
+    // 자동 로그인 없음 → 1단계 로그인
+    showView('viewStage1');
+  }
+})();
+</script>
