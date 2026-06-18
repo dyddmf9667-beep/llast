@@ -63,25 +63,20 @@
     .emoji-stage{position:relative;width:192px;height:224px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
     /* ── 골머니 캐릭터 이미지 ── */
     .coin-char-img{width:100%;height:100%;object-fit:contain;display:block;user-select:none;-webkit-user-drag:none;filter:drop-shadow(0 6px 14px rgba(100,80,0,.18))}
-    @keyframes coinThink{0%,100%{transform:rotate(-5deg) translateY(0)}50%{transform:rotate(5deg) translateY(-5px)}}
-    @keyframes coinRun{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-12px) rotate(3deg)}}
-    @keyframes coinStand{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-10px) scale(1.03)}}
-    @keyframes coinFly{0%,100%{transform:translateY(0) rotate(-7deg) scale(1)}50%{transform:translateY(-18px) rotate(7deg) scale(1.04)}}
-    @keyframes coinCele{0%,100%{transform:translateY(0) scale(1) rotate(-2deg)}40%{transform:translateY(-16px) scale(1.07) rotate(2deg)}80%{transform:translateY(-7px) scale(1.03)}}
-    .coin-think{animation:coinThink 2.8s ease-in-out infinite}
-    .coin-run{animation:coinRun 0.5s ease-in-out infinite}
-    .coin-stand{animation:coinStand 2.2s ease-in-out infinite}
-    .coin-fly{animation:coinFly 1.3s ease-in-out infinite}
-    .coin-cele{animation:coinCele 0.7s ease-in-out infinite}
+    @keyframes coinThink{0%{transform:rotate(-8deg) translateY(0) scaleX(1)}25%{transform:rotate(0deg) translateY(-3px) scaleX(1.04)}50%{transform:rotate(8deg) translateY(0) scaleX(1)}75%{transform:rotate(0deg) translateY(-3px) scaleX(0.96)}100%{transform:rotate(-8deg) translateY(0) scaleX(1)}}
+    @keyframes coinRun{0%,100%{transform:translateY(0) rotate(-9deg) scaleY(0.93)}20%{transform:translateY(-15px) rotate(-9deg) scaleY(1.05)}40%{transform:translateY(0) rotate(-9deg) scaleY(0.9)}60%{transform:translateY(-11px) rotate(-9deg) scaleY(1.03)}80%{transform:translateY(0) rotate(-9deg) scaleY(0.94)}}
+    @keyframes coinStand{0%,100%{transform:translateY(0) rotate(-2deg) scale(1)}33%{transform:translateY(-11px) rotate(0deg) scale(1.04)}66%{transform:translateY(-5px) rotate(2deg) scale(1.02)}}
+    @keyframes coinFly{0%{transform:translateY(0) rotate(-10deg) scale(1)}25%{transform:translateY(-22px) rotate(-4deg) scale(1.06)}50%{transform:translateY(-16px) rotate(2deg) scale(1.07)}75%{transform:translateY(-24px) rotate(6deg) scale(1.05)}100%{transform:translateY(0) rotate(-10deg) scale(1)}}
+    @keyframes coinCele{0%,100%{transform:translateY(0) scale(1) rotate(-3deg)}20%{transform:translateY(-26px) scale(1.12) rotate(4deg)}35%{transform:translateY(2px) scale(0.88) rotate(-2deg)}50%{transform:translateY(-18px) scale(1.08) rotate(3deg)}65%{transform:translateY(1px) scale(0.93) rotate(-1deg)}80%{transform:translateY(-10px) scale(1.05) rotate(2deg)}}
+    .coin-think{animation:coinThink 3s ease-in-out infinite}
+    .coin-run{animation:coinRun 0.48s ease-in-out infinite}
+    .coin-stand{animation:coinStand 2s ease-in-out infinite}
+    .coin-fly{animation:coinFly 1.6s ease-in-out infinite}
+    .coin-cele{animation:coinCele 0.72s ease-in-out infinite}
     .emoji-stage svg{width:100%;height:100%;overflow:visible}
 
     /* photo thumb corner */
-    .photo-thumb{position:absolute;bottom:-2px;right:-6px;width:54px;height:54px;border-radius:50%;overflow:hidden;border:2.5px solid rgba(255,255,255,.9);box-shadow:0 3px 10px rgba(0,0,0,.15);cursor:pointer;transition:transform .2s;display:none}
-    .photo-thumb:hover{transform:scale(1.1)}
-    .photo-thumb img{width:100%;height:100%;object-fit:cover}
 
-    .upload-pill{display:flex;align-items:center;gap:8px;padding:8px 20px;border-radius:999px;border:1.5px dashed rgba(167,139,250,.5);background:rgba(255,255,255,.45);cursor:pointer;font-size:.82rem;font-weight:600;color:rgba(45,45,58,.55);transition:all .2s}
-    .upload-pill:hover{border-color:#a78bfa;background:rgba(255,255,255,.7)}
     #photoInput{display:none}
     .analyzing-badge{display:none;padding:5px 16px;border-radius:999px;font-size:.78rem;font-weight:700;background:linear-gradient(135deg,#a78bfa,#6366f1);color:#fff;animation:pulse .8s ease-in-out infinite alternate}
     @keyframes pulse{from{opacity:.7}to{opacity:1}}
@@ -358,11 +353,6 @@
     .logout-btn:hover{background:rgba(225,29,72,.1);color:#e11d48;border-color:rgba(225,29,72,.3)}
     .switch-btn{padding:5px 12px;border-radius:999px;border:1.5px solid rgba(167,139,250,.4);background:rgba(255,255,255,.4);font-size:.72rem;font-weight:700;cursor:pointer;font-family:inherit;color:rgba(100,80,200,.6);transition:all .2s}
     .switch-btn:hover{background:rgba(167,139,250,.15);border-color:#a78bfa}
-    /* ── 동물 선택 피커 ── */
-    .animal-picker{display:flex;gap:7px;justify-content:center;margin-top:4px}
-    .animal-btn{width:36px;height:36px;border-radius:12px;border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.4);font-size:1.2rem;cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;user-select:none}
-    .animal-btn:hover{background:rgba(255,255,255,.72);transform:scale(1.1)}
-    .animal-btn.active{background:linear-gradient(135deg,rgba(167,139,250,.38),rgba(99,102,241,.28));border-color:#a78bfa;transform:scale(1.12);box-shadow:0 0 0 2.5px rgba(167,139,250,.3)}
     /* Firebase 동기화 상태 */
     .sync-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;transition:background .4s}
     .sync-dot.syncing{background:#f97316;animation:syncPulse .7s ease-in-out infinite alternate}
@@ -424,12 +414,6 @@
       .char-state-grid{gap:4px;max-width:280px}
       .state-dot{width:24px;height:24px;font-size:.7rem}
 
-      /* 동물 선택 */
-      .animal-picker{gap:6px}
-      .animal-btn{width:38px;height:38px;font-size:1.15rem}
-
-      /* 업로드 필 */
-      .upload-pill{font-size:.78rem;padding:7px 14px}
 
       /* 진행도 카드 */
       .compare-row{gap:0}
@@ -525,7 +509,6 @@
       .cal-day-num{font-size:.62rem}
       .auth-view{padding:16px 12px;gap:10px}
       .rec-stat{padding:9px 7px}
-      .animal-btn{width:36px;height:36px;font-size:1.1rem}
       .char-message{font-size:.82rem}
     }
   </style>
@@ -713,24 +696,6 @@
     <span class="char-status-label neutral" id="charLabel">저축을 시작해보세요!</span>
 
     <div class="emoji-stage" id="emojiStage">
-      <div class="photo-thumb" id="photoThumb" onclick="document.getElementById('photoInput').click()" title="사진 변경">
-        <img id="photoThumbImg" src="" alt=""/>
-      </div>
-    </div>
-
-    <div class="upload-pill" id="uploadPill" onclick="document.getElementById('photoInput').click()">
-      📷 사진 업로드 → 나만의 이모티콘 생성
-    </div>
-    <div class="analyzing-badge" id="analyzingBadge">🎨 이모티콘 분석 중...</div>
-    <input type="file" id="photoInput" accept="image/*" onchange="handlePhoto(event)"/>
-
-    <!-- 동물 선택 -->
-    <div class="animal-picker" id="animalPicker">
-      <button class="animal-btn active" onclick="setAnimal('cat')"     title="고양이">🐱</button>
-      <button class="animal-btn"        onclick="setAnimal('dog')"     title="강아지">🐶</button>
-      <button class="animal-btn"        onclick="setAnimal('hamster')" title="햄스터">🐹</button>
-      <button class="animal-btn"        onclick="setAnimal('horse')"   title="말">🐴</button>
-      <button class="animal-btn"        onclick="setAnimal('fox')"     title="여우">🦊</button>
     </div>
     <div class="char-state-grid" id="stateDots"></div>
     <div class="char-message neutral" id="charMessage">목표를 설정하고 첫 수입을 기록해봐요 ✨</div>
@@ -1137,9 +1102,7 @@ async function fbSaveUserData(code){
       recurringData: JSON.parse(localStorage.getItem(uk('recurringData'))|| '[]'),
       appTitle:      localStorage.getItem(uk('appTitle'))  || '골머니',
       titleIcon:     localStorage.getItem(uk('titleIcon')) || '💰',
-      personColors:  JSON.parse(localStorage.getItem(uk('personColors'))|| 'null'),
       prevPct:       parseFloat(localStorage.getItem(uk('prevPct'))      || '0'),
-      animalType:    localStorage.getItem(uk('animalType'))    || 'cat',
       weeklyBudget:  parseFloat(localStorage.getItem(uk('weeklyBudget')) || '0'),
       syncedAt:      Date.now()
     };
@@ -1268,9 +1231,7 @@ async function doLogin(){
           if(fbData.recurringData) localStorage.setItem(uk('recurringData'), JSON.stringify(fbData.recurringData));
           if(fbData.appTitle)      localStorage.setItem(uk('appTitle'),      fbData.appTitle);
           if(fbData.titleIcon)     localStorage.setItem(uk('titleIcon'),     fbData.titleIcon);
-          if(fbData.personColors)  localStorage.setItem(uk('personColors'),  JSON.stringify(fbData.personColors));
           if(fbData.prevPct!=null) localStorage.setItem(uk('prevPct'),       String(fbData.prevPct));
-          if(fbData.animalType)    localStorage.setItem(uk('animalType'),    fbData.animalType);
           if(fbData.weeklyBudget)  localStorage.setItem(uk('weeklyBudget'),  String(fbData.weeklyBudget));
         }
       } catch(fbErr){
@@ -1450,10 +1411,7 @@ function loadUserData(){
   recurringData=JSON.parse(localStorage.getItem(uk('recurringData'))||'[]');
   appTitle   =localStorage.getItem(uk('appTitle'))     ||'골머니';
   selectedIcon=localStorage.getItem(uk('titleIcon'))   ||'💰';
-  photoDataURL=localStorage.getItem(uk('photoDataURL'))||'';
-  personColors=JSON.parse(localStorage.getItem(uk('personColors'))||'null');
   prevPct    =parseFloat(localStorage.getItem(uk('prevPct'))||'0');
-  animalType   = localStorage.getItem(uk('animalType'))    || 'cat';
   weeklyBudget = parseFloat(localStorage.getItem(uk('weeklyBudget')) || '0');
 }
 
@@ -1461,9 +1419,6 @@ function loadUserData(){
 let data        = {goal:0,currentBase:0,records:[]};
 let appTitle    = '골머니';
 let selectedIcon= '💰';
-let photoDataURL= '';
-let personColors= null;
-let animalType   = 'cat'; // cat | dog | hamster | horse | fox
 let weeklyBudget = 0;
 let currentType ='income', currentFilter='all', currentView='list';
 let prevPct     = 0;
@@ -1510,71 +1465,12 @@ function blendHex(h1,h2,t){
   return rgbToHex({r:Math.round(c1.r*(1-t)+c2.r*t),g:Math.round(c1.g*(1-t)+c2.g*t),b:Math.round(c1.b*(1-t)+c2.b*t)});
 }
 
-// ═══════════════════════════════════════════════════════════════
-//  PHOTO ANALYSIS
-// ═══════════════════════════════════════════════════════════════
-function analyzePhoto(img){
-  const C=document.createElement('canvas'); C.width=120; C.height=120;
-  const ctx=C.getContext('2d'); ctx.drawImage(img,0,0,120,120);
-  const avg=(d)=>{let r=0,g=0,b=0,n=0;for(let i=0;i<d.length;i+=4){if(d[i+3]>100){r+=d[i];g+=d[i+1];b+=d[i+2];n++;}}return n?{r:Math.round(r/n),g:Math.round(g/n),b:Math.round(b/n)}:{r:50,g:30,b:20}};
-  const hair=avg(ctx.getImageData(25,2,70,26).data);
-  const skin=avg(ctx.getImageData(36,36,48,38).data);
-  return { hair:rgbToHex(hair), skin:rgbToHex(skin), eye:rgbToHex({r:Math.round(hair.r*.6),g:Math.round(hair.g*.6),b:Math.round(hair.b*.6)}) };
-}
-function handlePhoto(e){
-  const file=e.target.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    photoDataURL=ev.target.result;
-    localStorage.setItem(uk('photoDataURL'),photoDataURL);
-    document.getElementById('analyzingBadge').style.display='inline-flex';
-    document.getElementById('uploadPill').style.display='none';
-    const tmpImg=new Image();
-    tmpImg.onload=()=>{
-      personColors=analyzePhoto(tmpImg);
-      localStorage.setItem(uk('personColors'),JSON.stringify(personColors));
-      rebuildCache();
-      if(fbReady && currentUser) fbSaveUserData(currentUser);
-      document.getElementById('analyzingBadge').style.display='none';
-      const th=document.getElementById('photoThumb');
-      document.getElementById('photoThumbImg').src=photoDataURL;
-      th.style.display='block';
-      render(); toast('나만의 이모티콘이 생성됐어요 🎨','success');
-    };
-    tmpImg.src=photoDataURL;
-  };
-  reader.readAsDataURL(file);
-}
 
 // ═══════════════════════════════════════════════════════════════
 //  SVG EMOJI BUILDER — ANIMATED, ACCURATE FEATURES
 // ═══════════════════════════════════════════════════════════════
-function rebuildCache(){ STATES.forEach(s=>{ emojiCache[s.id]=buildEmoji(s.id,personColors); }); }
+function rebuildCache(){ STATES.forEach(s=>{ emojiCache[s.id]=buildEmoji(s.id,null); }); }
 
-function setAnimal(type){
-  animalType = type;
-  localStorage.setItem(uk('animalType'), type);
-  document.querySelectorAll('.animal-btn').forEach(b=>{
-    const t = b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
-    b.classList.toggle('active', t===type);
-  });
-  emojiCache={};
-  rebuildCache();
-  render();
-  // 러너 즉시 갱신
-  const runnerPct = data.goal>0 ? Math.min(100,(data.currentBase+(data.records||[]).reduce((s,r)=>s+(r.type==='income'?r.amount:-r.amount),0))/data.goal*100) : 0;
-  updateProgressRunner(runnerPct);
-  if(fbReady && currentUser) fbSaveUserData(currentUser);
-}
-
-// 동물별 기본 색상 (사진 미업로드 시)
-const ANIMAL_DEF = {
-  cat:     {main:'#c8a468', belly:'#f5e8d4', eye:'#3a2010'},
-  dog:     {main:'#c8a468', belly:'#f5e8d4', eye:'#3a2010'},
-  hamster: {main:'#e8c898', belly:'#f8ede0', eye:'#2a1808'},
-  horse:   {main:'#7a5030', belly:'#c8a478', eye:'#2a1808'},
-  fox:     {main:'#d4681a', belly:'#f8ede0', eye:'#3a2010'},
-};
 
 function buildEmoji(sid,colors){
   const CHAR={
@@ -1597,10 +1493,8 @@ function buildEmoji(sid,colors){
 
 function showEmojiState(sid){
   const stage=document.getElementById('emojiStage');
-  const thumb=document.getElementById('photoThumb');
   const svg=emojiCache[sid]||buildEmoji(sid,null);
   stage.innerHTML=svg;
-  stage.appendChild(thumb);
 }
 function renderStateDots(activeId){
   const wrap=document.getElementById('stateDots'); wrap.innerHTML='';
@@ -1724,8 +1618,10 @@ function updateProgressRunner(pct){
 
 // 러너 전용 SVG — 몸통 + 달리는 다리 포함
 function buildRunnerSVG(sid){
-  const src=sid<=2?'char_fly.png':'char_run.png';
-  return `<img src="${src}" style="width:100%;height:100%;object-fit:contain" alt="" draggable="false"/>`;
+  const CHAR={cele:'char_cele.png',fly:'char_fly.png',stand:'char_stand.png',run:'char_run.png',think:'char_think.png'};
+  const ANIM={cele:'coin-cele',fly:'coin-fly',stand:'coin-stand',run:'coin-run',think:'coin-think'};
+  const key=sid===1?'cele':sid===2?'fly':sid<=4?'stand':sid<=6?'run':'think';
+  return `<img src="${CHAR[key]}" class="coin-char-img ${ANIM[key]}" style="width:100%;height:100%;object-fit:contain" alt="" draggable="false"/>`;
 }
 
 function spawnFX(container, sid){
@@ -2303,25 +2199,12 @@ function toast(msg,type='info'){
 // ═══════════════════════════════════════════════════════════════
 function initApp(){
   emojiCache={};
-  // 동물 선택 버튼 활성화
-  document.querySelectorAll('.animal-btn').forEach(b=>{
-    const t=b.getAttribute('onclick').match(/'(\w+)'/)?.[1];
-    b.classList.toggle('active', t===animalType);
-  });
   document.getElementById('recordDate').value=new Date().toISOString().split('T')[0];
   document.getElementById('todayDate').textContent=new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'long',day:'numeric',weekday:'long'});
   document.getElementById('titleText').textContent=appTitle;
   document.getElementById('iconTrigger').textContent=selectedIcon;
   document.title=appTitle;
-  if(photoDataURL){
-    document.getElementById('photoThumbImg').src=photoDataURL;
-    document.getElementById('photoThumb').style.display='block';
-    document.getElementById('uploadPill').style.display='none';
-  } else {
-    document.getElementById('photoThumb').style.display='none';
-    document.getElementById('uploadPill').style.display='flex';
-  }
-  if(personColors) rebuildCache();
+  rebuildCache();
   render(true);
   populateRecDaySelect();
   renderRecurring();
